@@ -22,7 +22,7 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Euclid.h">
-      <Filter>Source Files</Filter>
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -30,9 +30,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="EuclidsOrchard.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Euclid.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

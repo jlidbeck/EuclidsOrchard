@@ -211,22 +211,31 @@ public:
 
 };
 
-//	returns sign of AB cross AC.
-//	this indicates whether point C lies to the left of segment AB,
-//	equivalently, whether A is left of BC, or B is left of CA.
-//	this can be interpreted as the sign of the triangle ABC: 
-//	1 indicates the triangle ABC is left-winding;
-//	-1 indicates the triangle ABC is right-winding;
-//	0 indicates A,B,C are collinear.
 //
-//	Note that only the sign is computed. This reduces the issue of integer overflow
-//	and also avoids extra operations.
+//	Returns the scalar triple product of 3 vectors, or equivalently,
+//	the orientation of the triangle ABC.
+//
+//	The scalar triple product is defined as A dot (B cross C) and is
+//	invariant under a circle-shift of the parameters. 
+//
+//	this indicates whether point C lies to the left of segment AB,
+//	or equivalently, whether A is left of BC, or B is left of CA.
+//	The function is invariant under a circle-shift of the parameters.
+//
+//	this can be interpreted as 
+//	- the sign of the volume of the parallelopiped defined by 3 vectors
+//	- whether A lies to the left of the line BC
+//	- the orientation of the triangle ABC: 
+//		1 indicates the triangle ABC is left-winding;
+//		-1 indicates the triangle ABC is right-winding;
+//		0 indicates A,B,C are collinear.
+//
+//	Note that only the sign is computed. This avoids extra operations
+//	and also reduces the issue of integer overflow.
+//
 template<class I>
 int leftOf(const Triplet<I> &a, const Triplet<I> &b, const Triplet<I> &c) {
-	// to expand the domain of this function, we take advantage of the fact 
-	// that only the sign needs to be computed. 
-	// otherwise the actual dot/cross calculations would require dividing by the sums--
-	// here we only need to calculate their signs and multiply them.
+
 	int abm = sign(c.sum()) * sign(a.sum()) * sign(b.sum());
 	return abm * sign(
 		  a.x * (b.y*c.z - b.z*c.y)
@@ -272,6 +281,14 @@ public:
 		operate(op, src);
 	}
 
+	//	Reset to identity matrix/basis triangle
+	void reset() {
+		m[0].set(1, 0, 0);
+		m[1].set(0, 1, 0);
+		m[2].set(0, 0, 1);
+		depth = 0;
+	}
+
 	void set(const Triplet<I> &p0, const Triplet<I> &p1, const Triplet<I> &p2) {
 		m[0] = p0;
 		m[1] = p1;
@@ -304,11 +321,15 @@ public:
 	//	Check whether all 3 columns are coprime and the row sums are coprime.
 	bool isCoprime() const {
 
-		// can this be replaced with a simple check that the determinant is 1? "unimodular"
-
-		if(!m[0].isCoprime() || !m[1].isCoprime() || !m[2].isCoprime()) {
+		// if a column has a common factor greater than 1,
+		// then the determinant will be a multiple of that factor.
+		if(determinant() != 1) {
 			return false;
 		}
+		ASSERT(m[0].isCoprime() && m[1].isCoprime() && m[2].isCoprime());
+
+		// can this be replaced with a simple check that the determinant is 1? "unimodular"
+
 		if(!centroid().isCoprime()) {
 			return false;
 		}
@@ -357,18 +378,25 @@ public:
 		return (abs >= 0 && bcs >= 0 && cas >= 0);
 	}//*/
 
-	bool isPointInTriangle(const Triplet<I> &pt) const {
+	//
+	//	AKA pointInTriangle
+	//	returns true if the point is inside this triangle or on an edge or vertex
+	//
+	bool containsPoint(const Triplet<I> &pt) const {
 		return leftOf(pt, m[0], m[1]) >= 0
 			&& leftOf(pt, m[1], m[2]) >= 0
 			&& leftOf(pt, m[2], m[0]) >= 0;
 	}
 
+	//
+	//	AKA triangleInTriangle
 	//	returns true if {tri} is contained entirely within this triangle.
-	//	edges and verti
-	bool isTriangleInTriangle(const TripletTriangle<I> &tri) const {
-		return isPointInTriangle(tri[0])
-			&& isPointInTriangle(tri[1])
-			&& isPointInTriangle(tri[2]);
+	//	edges and vertices may touch, so x.containsTriangle(x) would return true.
+	//
+	bool containsTriangle(const TripletTriangle<I> &tri) const {
+		return containsPoint(tri[0])
+			&& containsPoint(tri[1])
+			&& containsPoint(tri[2]);
 	}
 
 	//
@@ -381,11 +409,11 @@ public:
 
 	inline void merge(int fromCol, int toCol) {
 		ASSERT(fromCol != toCol);
+		ASSERT(fromCol >= 0 && fromCol < 3 && toCol >= 0 && toCol < 3);
 		m[toCol] += m[fromCol];
 		++depth;
 		ASSERT(isCoprime());
 		ASSERT(isTriangle());
-		ASSERT(determinant() == 1);
 	}
 
 	inline void mergeAll(int toCol) {
@@ -404,6 +432,27 @@ public:
 		// after: x, x+y, x+y+z
 		merge(primary, secondary);
 		merge(secondary, 3 - primary - secondary);
+	}
+
+	// creates triangle from midpoints--central quadrant
+	// this is a counterexample--breaking the sequential column-merge restriction
+	// causes the centroid to become non-coprime
+	void mergeCenter() {
+		auto col0 = m[0];
+		m[0] += m[1];
+		m[1] += m[2];
+		m[2] += col0;
+		++depth;
+		ASSERT(isCoprime());
+		ASSERT(isTriangle());
+	}
+
+	// rotate columns one to the right. preserves triangle invariants.
+	void rotate() {
+		auto temp = m[2];
+		m[2] = m[1];
+		m[1] = m[0];
+		m[0] = temp;
 	}
 
 	inline bool operate(char op, const TripletTriangle<I> &src) {
@@ -425,6 +474,13 @@ public:
 		case 'X': this->merge3(0, 2); break;
 		case 'Y': this->merge3(1, 0); break;
 		case 'Z': this->merge3(2, 1); break;
+		case 'i': this->mergeCenter(); break;	// center quadrant: INVALID
+		case 'j': this->merge(0, 1); this->merge(0, 2); break;	// X corner quadrant
+		case 'k': this->merge(1, 0); this->merge(1, 2); break;	// Y corner quadrant
+		case 'l': this->merge(2, 1); this->merge(2, 0); break;	// Z corner quadrant
+		case 'm': this->merge(0, 1); this->merge(2, 0); this->merge(1, 2); rotate(); break;	// X-ward inner 12th, rotated for aesthetics
+		case 'n': this->merge(1, 2); this->merge(0, 1); this->merge(2, 0); rotate(); break;	// Y-ward inner 12th
+		case 'o': this->merge(2, 0); this->merge(1, 2); this->merge(0, 1); rotate(); break;	// Z-ward inner 12th
 		case '1': this->mergeAll(0); break;
 		case '2': this->mergeAll(1); break;
 		case '3': this->mergeAll(2); break;
@@ -464,21 +520,8 @@ public:
 		I temp;
 
 		// calculate cross-products to characterize P by edges MA, MB, MC
-		temp = (msum*ax - asum*mx)*(msum*py - psum*my) - (msum*ay - asum*my)*(msum*px - psum*mx);
-		// ((mx+my+mz)*ax-(ax+ay+az)*mx)*((mx+my+mz)*py-(px+py+pz)*my) - ((mx+my+mz)*ay-(ax+ay+az)*my)*((mx+my+mz)*px-(px+py+pz)*mx)
-		// ((my+mz)*ax-(ay+az)*mx)*((mx+mz)*py-(px+pz)*my) - ((mx+mz)*ay-(ax+az)*my)*((my+mz)*px-(py+pz)*mx)
-		// ((my+mz)*ax)*((mx+mz)*py-(px+pz)*my) - ((ay+az)*mx)*((mx+mz)*py-(px+pz)*my) - ((mx+mz)*ay)*((my+mz)*px-(py+pz)*mx) + ((ax+az)*my)*((my+mz)*px-(py+pz)*mx)
-		// (my+mz)*ax*(mx+mz)*py - (my+mz)*ax*(px+pz)*my - (ay+az)*mx*(mx+mz)*py - (ay+az)*mx*(px+pz)*my - (mx+mz)*ay*(my+mz)*px - (mx+mz)*ay*(py+pz)*mx + (ax+az)*my*(my+mz)*px - (ax+az)*my*(py+pz)*mx
-		//  - (mx+my+mz)*mx*py*az 
-		//  - (mx + my + mz)*mx*pz*ay
-		//	- (mx + my + mz)*my*pz*ax
-		//	+ (-mx + my + mz)*my*px*az
-		//	+ (mx + my + mz)*mz*py*ax
-		//	- (mx + my + mz)*mz*px*ay
-		//	- 2 * mx*mx*py*ay
-		//	- 2 * mz*mx*py*ay
-		//	- 2 * mx*my*pz*az
-		//	- 2 * mx*my*px*ay
+		temp = (msum*ax - asum*mx)*(msum*py - psum*my) 
+			 - (msum*ay - asum*my)*(msum*px - psum*mx);
 		int maxmp = leftOf(ctr, m[0], pt);
 		ASSERT(sign(temp) == maxmp);
 
@@ -536,11 +579,20 @@ public:
 	// that is, if x < y, it's guaranteed that !(y<x).
 	// if !(x<y) and !(y<x), then x==y.
 	// This ordering assigns lower values to ...
-	int operator < (const TripletTriangle &tri) const {
+	inline int operator < (const TripletTriangle &tri) const {
+		int cmp = compare(tri);
+		return (cmp > 0);
+	}
+
+	// returns:
+	// 1 if {this} is lower priority than {tri},
+	// -1 if {this} is higher priority than {tri},
+	// 0 if {this} and {tri} are equal--the same matrix/triangle.
+	int compare(const TripletTriangle &tri) const {
 
 		// smaller depth means higher priority
 		if(depth < tri.depth) {
-			return 0;
+			return -1;
 		}
 		if(tri.depth < depth) {
 			return 1;	// this is lower priority than tri
@@ -549,10 +601,10 @@ public:
 		auto l = this->centroid();
 		auto r = tri.centroid();
 		if(l < r) return 1;
-		if(r < l) return 0;
+		if(r < l) return -1;
 		for(int i = 0; i < 3; ++i) {
 			if(m[i] < tri.m[i]) return 1;
-			if(tri.m[i] < m[i]) return 0;
+			if(tri.m[i] < m[i]) return -1;
 		}
 		// they are equal
 		return 0;
@@ -590,12 +642,12 @@ template<class I>
 bool trianglesIntersect(const TripletTriangle<I> &a, const TripletTriangle<I> &b) {
 	// if any vertex is inside the other triangle, the triangles overlap
 
-	if(    b.isPointInTriangle(a[0])
-		|| b.isPointInTriangle(a[1])
-		|| b.isPointInTriangle(a[2])
-		|| a.isPointInTriangle(b[0])
-		|| a.isPointInTriangle(b[1])
-		|| a.isPointInTriangle(b[2])) {
+	if(    b.containsPoint(a[0])
+		|| b.containsPoint(a[1])
+		|| b.containsPoint(a[2])
+		|| a.containsPoint(b[0])
+		|| a.containsPoint(b[1])
+		|| a.containsPoint(b[2])) {
 		return true;
 	}
 
@@ -711,7 +763,7 @@ bool triangleIntersectsCircle(const TripletTriangle<I> &tri, const Triplet<I> &c
 	//}
 
 	// if circle's center is inside triangle, they intersect
-	if(tri.isPointInTriangle(ctr)) {
+	if(tri.containsPoint(ctr)) {
 		return true;
 	}
 
@@ -748,10 +800,10 @@ ostream& operator << (ostream &out, const TripletTriangle<I> &m) {
 //
 
 // 13 possible sextant classifications:
-// 00: centroid: single point
-// X0, Y0, Z0: edge between centroid and vertex
-// YZ, ZX, XY: edge opposite vertex X, Y, and Z, respectively
-// XP, XN: triangular regions left and right of edge between centroid and vertex X
+// 00: centroid: single point (0 d.f.)
+// X0, Y0, Z0: edge between centroid and vertex (1 d.f.)
+// YZ, ZX, XY: edge opposite vertex X, Y, and Z, respectively (1 d.f.)
+// XP, XN: triangular regions left (P) and right (N) of edge between centroid and vertex X (2 d.f.)
 #define SEXX0 *((const int*)("0-+"))
 #define SEXXN *((const int*)("+-+"))
 #define SEXXY *((const int*)("+-0"))
@@ -889,7 +941,7 @@ private:
 			return ERROR_INTERNAL;
 		}
 
-		if(!triangle.isPointInTriangle(m_target)) {
+		if(!triangle.containsPoint(m_target)) {
 			cerr << ".. Rejecting[" << depth << "]..\n";
 			cerr << triangle;
 			return ERROR_INTERNAL;
@@ -937,12 +989,12 @@ private:
 			}
 			/*
 			// build 6 subregions, characterize point: deprecate
-			TripletTriangle<I> mx('x', triangle); int inmx = mx.isPointInTriangle(m_target);
-			TripletTriangle<I> my('y', triangle); int inmy = my.isPointInTriangle(m_target);
-			TripletTriangle<I> mz('z', triangle); int inmz = mz.isPointInTriangle(m_target);
-			TripletTriangle<I> mX('X', triangle); int inmX = mX.isPointInTriangle(m_target);
-			TripletTriangle<I> mY('Y', triangle); int inmY = mY.isPointInTriangle(m_target);
-			TripletTriangle<I> mZ('Z', triangle); int inmZ = mZ.isPointInTriangle(m_target);
+			TripletTriangle<I> mx('x', triangle); int inmx = mx.containsPoint(m_target);
+			TripletTriangle<I> my('y', triangle); int inmy = my.containsPoint(m_target);
+			TripletTriangle<I> mz('z', triangle); int inmz = mz.containsPoint(m_target);
+			TripletTriangle<I> mX('X', triangle); int inmX = mX.containsPoint(m_target);
+			TripletTriangle<I> mY('Y', triangle); int inmY = mY.containsPoint(m_target);
+			TripletTriangle<I> mZ('Z', triangle); int inmZ = mZ.containsPoint(m_target);
 			int regionCount = inmx + inmy + inmz + inmX + inmY + inmZ;
 			*/
 
@@ -1068,7 +1120,7 @@ private:
 			return false;
 		}
 
-		if(!m_clip.isPointInTriangle(p)) {
+		if(!m_clip.containsPoint(p)) {
 			return false;
 		}
 
@@ -1207,17 +1259,13 @@ private:
 		cout << "Test 1\n" << mTest1;
 		ASSERT(mTest1.isCoprime());
 		ASSERT(mTest1.isTriangle());
-		bb = mTest1.isPointInTriangle(vec3(36, 24, 19));
-		ASSERT(bb);
-		bb = mTest1.isPointInTriangle1(vec3(36, 24, 19));
+		bb = mTest1.containsPoint(vec3(36, 24, 19));
 		ASSERT(bb);
 
 		cout << "Test 2\n" << mTest2;
 		ASSERT(mTest2.isCoprime());
 		ASSERT(mTest2.isTriangle());
-		bb = mTest2.isPointInTriangle(vec3(36, 24, 19));
-		ASSERT(bb);
-		bb = mTest2.isPointInTriangle1(vec3(36, 24, 19));
+		bb = mTest2.containsPoint(vec3(36, 24, 19));
 		ASSERT(bb);
 
 		int signabc;
