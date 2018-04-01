@@ -101,13 +101,10 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\..\..\EuclidsOrchard\EuclidsOrchard\Euclid.h" />
     <ClInclude Include="circular_buffer.h" />
     <ClInclude Include="ConsoleWindow.h" />
     <ClInclude Include="EuclidDemo.h" />
-    <ClInclude Include="palette.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="ColorUtil.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ConsoleWindow.cpp" />

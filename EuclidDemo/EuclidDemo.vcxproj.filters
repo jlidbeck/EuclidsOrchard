@@ -18,20 +18,11 @@
     <ClInclude Include="ConsoleWindow.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\EuclidsOrchard\EuclidsOrchard\Euclid.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
     <ClInclude Include="EuclidDemo.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="palette.h">
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="resource.h">
       <Filter>Resource Files</Filter>
-    </ClInclude>
-    <ClInclude Include="ColorUtil.h">
-      <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
