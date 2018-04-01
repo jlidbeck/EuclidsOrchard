@@ -1,6 +1,9 @@
 #pragma once
 
-#include <Windows.h>
+#ifndef _WINDOWS_
+#include <windows.h>
+#endif
+
 #include <wincon.h>
 #include <stdio.h>
 #include <iostream>
@@ -31,7 +34,8 @@ public:
 		return (m_hConsoleOut != NULL);
 	}
 
-	void allocate();
+	void allocate(LPCSTR lpConsoleTitle = NULL);
+	bool userActivityPending();
 	std::string getCommand();
 	bool free();
 };

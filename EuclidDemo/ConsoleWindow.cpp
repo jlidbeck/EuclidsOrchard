@@ -1,10 +1,13 @@
 #pragma once
 #include "ConsoleWindow.h"
 
-void ConsoleWindow::allocate() {
+void ConsoleWindow::allocate(LPCSTR lpConsoleTitle) {
 	DWORD numEvents, numRead, numWritten;
 	if(!m_hConsoleOut) {
 		::AllocConsole();
+		if(lpConsoleTitle != NULL) {
+			::SetConsoleTitle(lpConsoleTitle);
+		}
 		m_hConsoleOut = GetStdHandle(STD_OUTPUT_HANDLE);
 		m_hConsoleIn = GetStdHandle(STD_INPUT_HANDLE);
 
@@ -14,6 +17,30 @@ void ConsoleWindow::allocate() {
 
 		std::cout << m_prompt;
 	}
+}
+
+bool ConsoleWindow::userActivityPending() {
+	DWORD numEvents, numRead, numWritten;
+
+	GetNumberOfConsoleInputEvents(m_hConsoleIn, &numEvents);
+	if(!numEvents) return false;
+
+	INPUT_RECORD inputRecords[10];
+	while(PeekConsoleInput(m_hConsoleIn, inputRecords, 1, &numRead)) {
+		if(!numEvents || !numRead) {
+			return false;
+		}
+
+		if(inputRecords[0].EventType == KEY_EVENT) {
+			return true;
+		}	// if key event
+		else {
+			// consume and ignore non-key events
+			ReadConsoleInput(m_hConsoleIn, inputRecords, 1, &numRead);
+		}
+	}
+
+	return false;
 }
 
 std::string ConsoleWindow::getCommand() {
@@ -69,8 +96,8 @@ std::string ConsoleWindow::getCommand() {
 			}
 		}	// if key event
 		else {
-			// ignore the rest
-			ReadConsoleInput(m_hConsoleIn, inputRecords, 1, &numRead); 
+			// consume and ignore non-key events
+			ReadConsoleInput(m_hConsoleIn, inputRecords, 1, &numRead);
 			//printf("{%d}", inputRecords[0].EventType);
 		}
 	}
