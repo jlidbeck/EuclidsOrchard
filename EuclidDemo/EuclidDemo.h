@@ -1,47 +1,85 @@
 #pragma once
 
+#include <afx.h>
 #include "resource.h"
-#include <ColorUtil.h>
+#include <Euclid.h>
 #include <rsWin32Saver/rsWin32Saver.h>
 #include <rsText/rsText.h>
 #include <vector>
 #include <set>
 #include <unordered_set>
 #include <unordered_map>
-#include "palette.h"
+#include <random>
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include "util.h"
-#include "circular_buffer.h"
-#include <Euclid.h>
-#include "ConsoleWindow.h"
+#include <ColorUtil.h>
+#include <palette.h>
+#include <circular_buffer.h>
+#include <ConsoleWindow.h>
 
 using std::vector;
 
+#ifdef _DEBUGq
+//#define MAX_NUM_TRIANGLES 1555	// (6^5-1)/5
+#define MAX_NUM_TRIANGLES 9331	// (6^6-1)/5
+#else
+//#define MAX_NUM_TRIANGLES 9331	// (6^6-1)/5
+#define MAX_NUM_TRIANGLES 20000
+#endif
+
+#define TRI_TIME_REPRODUCE 0.5
+
+typedef struct 
+{
+	GLfloat v[4];
+
+	operator float*() {
+		return v;
+	}
+	operator const float*() const {
+		return v;
+	}
+
+} RGBA;
+
+const RGBA WHITE = { 1,1,1,1 };
+
+enum CameraMode 
+{
+	CENTER=0, TARGET, TOUR, DRIFT
+};
+
 // settings relating to the screensaver (not per-simulation-specific)
-class EuclidDemoSettings {
+class EuclidDemoSettings 
+{
 public:
 	int m_nDrawVertices = 1;
 	float m_fVertexSize = 0.05f;
 	int m_nDrawEdges = 1;
-	bool m_bDrawTriangles = true;
+	int m_nDrawBranches = 0;
+	bool m_bFillTriangles = true;
 	bool m_bDrawTarget = true;
 	bool m_bDrawStats = true;
+	float m_alpha = 1;
 
-	int m_nCameraMode = 3;
+	CameraMode m_nCameraMode = CameraMode::TARGET;
 	double m_fFOV = 120.0;
 	int multiScreenMode = 0;	// 0 = single drawing window across screens; 1 = individual window per monitor
 	int nSimulationSpeed = 3;
 	int nRandomizeTimer = 90;	// auto-change every 90 seconds
 	int nCameraSpeed = 6;		// about 40 seconds between camera waypoints
 
+	//weighted_palette<rgb> m_palette;
 	weighted_palette<COLORREF> m_palette;
 
 	float m_fRandomPaletteProbability = 0.5;
 
+	double TRI_TIME_LIFESPAN = 30.0;
 	int m_nMaxTriangleDepth = 25;
 	int m_nMaxTriangleSum = 1000;
 	bool m_alive = true;
+	bool m_bReplaceParent = true;
 	
 	void resetToDefaults(int which);
 	void randomize();
@@ -49,26 +87,18 @@ public:
 	void usePresetPalette(int index);
 };
 
-#ifdef _DEBUG
-#define MAX_NUM_TRIANGLES 1555	// (6^5-1)/5
-#else
-//#define MAX_NUM_TRIANGLES 9331	// (6^6-1)/5
-#define MAX_NUM_TRIANGLES 20000
-#endif
-
-#define TRI_TIME_REPRODUCE 0.35
-#define TRI_TIME_LIFESPAN 19.5
-
-class TriangleNode {
+class TriangleNode 
+{
 public:
 	TripletTriangle<int> tri;
 	double m_fStartTime, m_fLifespan;
-	float m_rgba[4];
+	RGBA m_rgba;
 	int m_nEvent;
 	bool m_bFertile = true;
 	TripletTriangle<int> parent;
 
-	TriangleNode(const TripletTriangle<int> &tri, double startTime, double lifespan = TRI_TIME_LIFESPAN, int event = 42, bool fertile = true) {
+	TriangleNode(const TripletTriangle<int> &tri, double startTime, double lifespan, int event = 42, bool fertile = true) 
+	{
 		this->tri = tri;
 		m_fStartTime = startTime;
 		m_fLifespan = lifespan;
@@ -79,7 +109,8 @@ public:
 
 	// creates basis/identity matrix triangle
 	// uses TripletTriangle's default constructor
-	TriangleNode(double startTime = 0, double lifespan = TRI_TIME_LIFESPAN) {
+	TriangleNode(double startTime = 0, double lifespan=1)
+	{
 		m_fStartTime = startTime;
 		m_fLifespan = lifespan;
 		m_nEvent = 42;
@@ -87,19 +118,30 @@ public:
 		//setColor();
 	}
 
-	void getColor(float * rgb) const {
+	inline void computeColor()
+	{
+		float hsv[3];
+		getColorHSV(hsv);
+		::HSVtoRGB(hsv, (float*)m_rgba);
+	}
+
+	void getColorHSV(float * hsv) const 
+	{
 		auto ctr = this->tri.centroid();
-		float hue = (float)(ctr.x) / ctr.sum() + tri.depth / 33.97;
-		hsl2rgb(hue, 0.9f, 1.0f, rgb);
+		hsv[0] = (float)(ctr.x) / ctr.sum() + tri.depth / 33.97f;
+		hsv[1] = 0.9f;
+		hsv[2] = 1.0f;
 	}
 
 	// priority comparison
-	int operator < (const TriangleNode &evt) const { 
+	int operator < (const TriangleNode &evt) const 
+	{ 
 		return m_fStartTime < evt.m_fStartTime 
 			|| (m_fStartTime == evt.m_fStartTime && tri < evt.tri);
 	}
 
-	int operator != (const TriangleNode &tnode) const {
+	int operator != (const TriangleNode &tnode) const 
+	{
 		return !(m_fStartTime == tnode.m_fStartTime
 			&& m_nEvent == tnode.m_nEvent
 			&& m_fLifespan == tnode.m_fLifespan
@@ -107,7 +149,15 @@ public:
 	}
 };
 
-class TripletTriangleLowDepthPriority {
+class TNodeStartTimePriority {
+public:
+	// returns 1 if b is higher priority than a
+	int operator()(const TriangleNode& a, const TriangleNode& b) {
+		return (b.m_fStartTime < a.m_fStartTime);
+	}
+};
+
+class TNodeLowDepthPriority {
 public:
 	// returns 1 if b is higher priority than a
 	int operator()(const TriangleNode& a, const TriangleNode& b) {
@@ -116,7 +166,7 @@ public:
 };
 
 //	for rendering: deep triangles have higher priority and are rendered first
-class TripletTriangleHighDepthPriority {
+class TNodeHighDepthPriority {
 public:
 	// returns 1 if b is higher priority than a
 	int operator()(const TripletTriangle<int>& a, const TripletTriangle<int>& b) const {
@@ -124,7 +174,7 @@ public:
 	}
 };
 
-class TripletTriangleLowSumPriority {
+class TNodeLowSumPriority {
 public:
 	// returns 1 if b is higher priority than a
 	int operator()(const TriangleNode& a, const TriangleNode& b) {
@@ -146,7 +196,7 @@ public:
 	}
 };
 
-class TripletTriangleCentralPriority {
+class TNodeCentralPriority {
 public:
 	// returns 1 if b is higher priority than a
 	int operator()(const TriangleNode& a, const TriangleNode& b) {
@@ -201,21 +251,34 @@ interface IScreensaver {
 	void draw();
 };
 
-class EuclidDemo : public IScreensaver {
-
-	// state
-	int m_readyToDraw = 0;
-	float m_aspectRatio;
-	double m_lastSettingsChange;
-	HWND m_hwnd;
-	ConsoleWindow m_console;
-
-	// OpenGL objects
+class EuclidDemo : public IScreensaver 
+{
+public:
+	EuclidDemoSettings m_settings;
 	rsTimer m_timer;
 	rsText m_text;
 
+private:
+	// state
+	int m_readyToDraw = 0;
+	float m_fAspectRatio;
+	double m_lastSettingsChange;
+
+	// random
+	std::random_device m_randomDevice { };
+	std::mt19937 m_randomGenerator { m_randomDevice() };
+
+	// FPS
+	int m_nFrameCount;
+	double m_fLastFPSTime;
+	double m_fps;
+
+	// components
+	HWND m_hwnd;
+	ConsoleWindow m_console;
+
 	// Euclid data
-	std::map<TripletTriangle<int>, TriangleNode, TripletTriangleHighDepthPriority> m_allTriangles;
+	std::map<TripletTriangle<int>, TriangleNode, TNodeHighDepthPriority> m_allTriangles;
 	
 	// target find
 	TriangleNode m_userNode;
@@ -223,37 +286,49 @@ class EuclidDemo : public IScreensaver {
 	Triplet<int> m_targetCenter;
 	float m_targetRadius = 0;
 	char m_ops[40] =
-		// "XxYyZz";			//"jklXxYyZz";
+		//"XxYyZz";	// proper sextant enumeration
+		"XxYyZz123";	// complete enumeration
+		//"uvw";		// thirds enumeration
+		//"jkl";		// sierpinski (outer 3 quarters)
+		//"mno";		// inner sixths
+		//"jklmno";		// outer/inner sixths
+		//"jklXxYyZz";
 		//"XYZjkl";
-		//"jkl";	// sierpinski
-		//"jklmno";	// outer/inner sixths
-		"mno";	// inner sixths
 		//"Xxyz";
-	typedef enum { SHAPE_NONE = 0, SHAPE_TRIANGLE = 1, SHAPE_CIRCLE, SHAPE_FILL, SHAPE_POINT_SEARCH, SHAPE_GROW } growth_enum;
-	growth_enum m_targetShape = SHAPE_GROW;
+
+	enum class growth_enum { 
+		NONE = 0, TRIANGLE = 1, CIRCLE, FILL, POINT_SEARCH, STOCHASTIC 
+	};
+	growth_enum m_targetShape = growth_enum::STOCHASTIC;
 	static std::map<growth_enum, string> s_growth_enum_names;
 	
 	//std::queue<TriangleNode>
-	//std::priority_queue<TriangleNode, circular_buffer<TriangleNode, MAX_NUM_TRIANGLES>, TripletTriangleLowSumPriority>
-	//std::priority_queue<TriangleNode, vector<TriangleNode>, TripletTriangleLowSumPriority >
-	std::priority_queue<TriangleNode, vector<TriangleNode>, TripletTriangleLowDepthPriority > 
-	//std::priority_queue<TriangleNode, deque<TriangleNode>, TripletTriangleLowSumPriority > 
+	//std::priority_queue<TriangleNode, circular_buffer<TriangleNode, MAX_NUM_TRIANGLES>, TNodeLowSumPriority>
+	//std::priority_queue<TriangleNode, vector<TriangleNode>, TNodeLowSumPriority >
+	//std::priority_queue<TriangleNode, vector<TriangleNode>, TNodeLowDepthPriority >
+	std::priority_queue<TriangleNode, vector<TriangleNode>, TNodeStartTimePriority >
+	//std::priority_queue<TriangleNode, deque<TriangleNode>, TNodeLowSumPriority > 
 		m_growQueue;
 
 	int countMaxDepth = 0;
 	int countMaxSum = 0;
 	int countCollision = 0;
 
-public:
-	EuclidDemoSettings m_settings;
+	bool verbose = true;
 
-private:	
+	// GL data
+private:
+	vector<Triplet<GLint>> m_vTriangleVertices;
+	vector<RGBA> m_vTriangleColors;
+	vector<RGBA> m_vVertexColors;
 	GLuint LIST_VERTEX = -1;
 	GLuint LIST_TARGET = -1;
 
 public:
+	EuclidDemo();
+
 	void draw();
-	void changeSettings();
+	void randomizeSettings();
 	void reshape();
 
 	void initSaver(HWND hwnd);
@@ -265,19 +340,27 @@ public:
 	friend void idleProc();
 
 	void processConsole();
+	bool executeUserCommand(string cmd);
+	bool executeUserOp(string op);
+	bool addTrianglePath(string path);
 
 private:
 	void drawViewport(float x0, float y0, float x1, float y1);
-	void drawTriangle(const TriangleNode &evt);
-	void drawVertices(const TriangleNode &evt);
+	void drawTriangles();
+	//void drawTriangle(const TriangleNode &evt);
+
+	void drawVertices();
+	//void drawVertices(const TriangleNode &evt);
+	void drawBranches(const TriangleNode &evt);
 
 	void step();
 
-	void renewAll();
+	void renewAll(double fExtendLifespan);
 	void targetFind(growth_enum shape);
+	void targetFind(growth_enum shape, const Triplet<int> &target);
+	void createRandomTarget();
 	bool processGrowthQueue(int count);
 	void resetGrowthQueue();
-	//void triangleFill();
 	int addTriangleUnique(const TripletTriangle<int> &tri);
 	int addTriangleUnique(const TriangleNode &evt);
 };

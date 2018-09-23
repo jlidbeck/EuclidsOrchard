@@ -1,14 +1,17 @@
 #pragma once
 
+#include <assert.h>
 #include <stdio.h>
 #include <iostream>
 #include <sstream>
-#define _AFXDLL 1
-#include <afx.h>
 #include <queue>
 #include <vector>
 #include <string>
 #include <map>
+
+#ifndef TRACE
+#define TRACE(x) ((void)0)
+#endif
 
 using namespace std;
 
@@ -50,29 +53,37 @@ I gcd(I m, I n) {
 // gcd(x,y,0) == gcd(x,y)
 inline int gcd2(const int *pValues, int numValues) {
 	vector<int> p(pValues, pValues + numValues);
-	int i1, v1, i2, v2;
+	int i1, v1, v2;
 
 	bool changes = true;
-	while(changes) {
+	while(changes) 
+	{
 		changes = false;
 
 		std::sort(p.begin(), p.end());
 		
 		// replace all values with remainder(value, next smallest value)
-		for(i2 = numValues - 1; i2 > 0;) {
+		for(int i2 = numValues - 1; i2 > 0;) 
+		{
+			// find all values equal to [i2]
+
 			v2 = p[i2];
 			for(i1 = i2 - 1; i1 >= 0 && (v1 = p[i1]) == v2; --i1);
-			if(i1 < 0) {
+			if(i1 < 0) 
+			{
 				break;
 			}
 
 			// replace all v2 with v2%v1
-			if(!v1) {
+
+			if(v1 == 0)
+			{
 				break;
 			}
 
 			int newv2 = v2%v1;
-			for(int j = i2; j > i1; --j) {
+			for(int j = i2; j > i1; --j) 
+			{
 				p[j] = newv2;
 			}
 			changes = true;
@@ -84,7 +95,8 @@ inline int gcd2(const int *pValues, int numValues) {
 
 // brute-force method--for checking only
 // gcd(x,y,0) == gcd(x,y)
-inline int gcd(const int *pValues, int numValues) {
+inline int gcd(const int *pValues, int numValues) 
+{
 	int test = ::gcd2(pValues, numValues);
 
 	// set k to min positive value
@@ -96,16 +108,20 @@ inline int gcd(const int *pValues, int numValues) {
 	}
 
 	// count k down to 2, breaking on first common factor found
-	for(; k > 1; --k) {
+	for(; k > 1; --k) 
+	{
 		int i;
-		for(i = 0; i < numValues; ++i) {
-			if(pValues[i] % k != 0) {
+		for(i = 0; i < numValues; ++i)
+		{
+			if(pValues[i] % k != 0) 
+			{
 				// k is not a common factor
 				break;
 			}
 		}
 
-		if(i == numValues) {
+		if(i == numValues) 
+		{
 			// all values divided k
 			return k;
 		}
@@ -132,9 +148,10 @@ inline int gcd(const int *pValues, int numValues) {
 //	[1,0,0], [0,1,0], [0,0,1] to (1,0), (0,1), and the origin.
 //
 //	Another more aesthetic option is an equilateral triangle: ((z+0.5*y)/(x+y+z), (sqrt(3)/2*y)/(x+y+z))
-
+//
 template<class I>
-class Triplet {
+class Triplet 
+{
 public:
 	I x, y, z;
 	static char _buf[4];
@@ -145,31 +162,58 @@ public:
 	Triplet(I px, I py, I pz)
 		: x(px), y(py), z(pz) {}
 
-	void set(I px, I py, I pz) {
-		ASSERT(px || py || pz);
+	void set(I px, I py, I pz) 
+	{
+		//assert(px || py || pz);
 		x = px; y = py; z = pz;
 	}
 
 	inline I sum() const { return x + y + z; }
+
 	I lengthSq() const { return x*x + y*y + z*z; }
 
+	// vector is all zeros
+	bool operator!() const { return !x && !y && !z; }
+
+	Triplet operator-(const Triplet &rhs) const
+	{
+		return Triplet(x - rhs.x, y - rhs.y, z - rhs.z);
+	}
+
+	int dot(const Triplet &rhs) const
+	{
+		return x * rhs.x + y * rhs.y + z * rhs.z;
+	}
+
 	// returns true if this a coprime triplet, that is, GCD(x,y,z) == 1
-	int isCoprime() const {
-		ASSERT(::gcd(x, ::gcd(y, z)) == ::gcd(&x, 3));
+	int isCoprime() const 
+	{
+		assert(::gcd(x, ::gcd(y, z)) == ::gcd(&x, 3));
 		return (::gcd(x, ::gcd(y, z)) == 1);
 	}
 
-	inline void operator += (const Triplet &p) {
+	bool isPythagoreanTriple() const
+	{
+		int a2 = x*x;
+		int b2 = y*y;
+		int c2 = z*z;
+		return ((a2 + b2 == c2) || (b2 + c2 == a2) || (c2 + a2 == b2));
+	}
+
+	inline void operator += (const Triplet &p) 
+	{
 		x += p.x;
 		y += p.y;
 		z += p.z;
 	}
 
-	inline Triplet operator + (const Triplet &b) const {
+	inline Triplet operator + (const Triplet &b) const 
+	{
 		return Triplet(x + b.x, y + b.y, z + b.z);
 	}
 
-	inline bool operator == (const Triplet &p) const {
+	inline bool operator == (const Triplet &p) const 
+	{
 		return (x == p.x && y == p.y && z == p.z);
 	}
 
@@ -234,8 +278,8 @@ public:
 //	and also reduces the issue of integer overflow.
 //
 template<class I>
-int leftOf(const Triplet<I> &a, const Triplet<I> &b, const Triplet<I> &c) {
-
+int leftOf(const Triplet<I> &a, const Triplet<I> &b, const Triplet<I> &c) 
+{
 	int abm = sign(c.sum()) * sign(a.sum()) * sign(b.sum());
 	return abm * sign(
 		  a.x * (b.y*c.z - b.z*c.y)
@@ -244,17 +288,50 @@ int leftOf(const Triplet<I> &a, const Triplet<I> &b, const Triplet<I> &c) {
 }
 
 template<class I>
-ostream& operator << (ostream &out, const Triplet<I> &p) {
+ostream& operator << (ostream &out, const Triplet<I> &p) 
+{
 	out << "[" << p.x << ", " << p.y << ", " << p.z << "]";
 	return out;
 }
 
 template<class I>
-istream& operator >> (istream &in, Triplet<I> &p) {
+istream& operator >> (istream &in, Triplet<I> &p) 
+{
 	char c = ',';
 	in >> p.x >> c >> p.y >> c >> p.z;
 	return in;
 }
+
+union SexClass
+{
+	char asChar[4];
+	int asInt = 0;
+
+	constexpr SexClass(int i) : asInt(i) { };
+	constexpr SexClass(const char sz[4]) : asInt(*((const int*)(&sz[0]))) { };
+	bool operator==(int i) const { return (asInt == i); }
+};
+
+// 13 possible sextant classifications:
+// 00: centroid: single point (0 d.f.)
+// X0, Y0, Z0: edge between centroid and vertex (1 d.f.)
+// YZ, ZX, XY: edge opposite vertex X, Y, and Z, respectively (1 d.f.)
+// XP, XN: triangular regions left (P) and right (N) of edge between centroid and vertex X (2 d.f.)
+#define SEXX0 *((const int*)("0-+"))
+#define SEXXN *((const int*)("+-+"))
+#define SEXXY *((const int*)("+-0"))
+#define SEXYP *((const int*)("+--"))
+#define SEXY0 *((const int*)("+0-"))
+#define SEXYN *((const int*)("++-"))
+#define SEXYZ *((const int*)("0+-"))
+#define SEXZP *((const int*)("-+-"))
+#define SEXZ0 *((const int*)("-+0"))
+#define SEXZN *((const int*)("-++"))
+#define SEXZX *((const int*)("-0+"))
+#define SEXXP *((const int*)("--+"))
+#define SEX00 *((const int*)("000"))
+
+
 
 template<class I>
 char Triplet<I>::_buf[] = "***";
@@ -262,84 +339,119 @@ char Triplet<I>::_buf[] = "***";
 //
 //	3x3 integer matrix
 //
-
 template<class I>
-class TripletTriangle {
+class TripletTriangle 
+{
+public:
 	Triplet<I> m[3] = { { 1,0,0 },{ 0,1,0 },{ 0,0,1 } };
 public:
 	unsigned int depth = 0;
 
 	TripletTriangle() {}
 
-	TripletTriangle(const Triplet<I> &p0, const Triplet<I> &p1, const Triplet<I> &p2) {
+	TripletTriangle(const Triplet<I> &p0, const Triplet<I> &p1, const Triplet<I> &p2) 
+	{
 		m[0] = p0;
 		m[1] = p1;
 		m[2] = p2;
 	}
 
-	TripletTriangle(char op, const TripletTriangle<I> &src) {
+	TripletTriangle(char op, const TripletTriangle<I> &src) 
+	{
 		operate(op, src);
 	}
 
+	bool isZero() const
+	{
+		return (!m[0] && !m[1] && !m[2]);
+	}
+
+	TripletTriangle operator+(char op) const
+	{
+		TripletTriangle result(*this);
+		if(result.operate(op))
+			return result;
+		result.m[0].set(0, 0, 0);
+		result.m[1].set(0, 0, 0);
+		result.m[2].set(0, 0, 0);
+		result.depth = 0;
+		return result;
+	}
+
 	//	Reset to identity matrix/basis triangle
-	void reset() {
+	void reset() 
+	{
 		m[0].set(1, 0, 0);
 		m[1].set(0, 1, 0);
 		m[2].set(0, 0, 1);
 		depth = 0;
 	}
 
-	void set(const Triplet<I> &p0, const Triplet<I> &p1, const Triplet<I> &p2) {
+	void set(const Triplet<I> &p0, const Triplet<I> &p1, const Triplet<I> &p2) 
+	{
 		m[0] = p0;
 		m[1] = p1;
 		m[2] = p2;
 	}
 
+	int numColumns() const
+	{
+		return !!m[0] + !!m[1] + !!m[2];
+	}
+
 	// fetch column / triplet
-	const Triplet<I>& operator[](int idx) const {
-		ASSERT(idx >= 0 && idx < 3);
+	const Triplet<I>& operator [](int idx) const 
+	{
+		assert(idx >= 0 && idx < 3);
 		return m[idx];
 	}
 
 	// fetch column / triplet
-	Triplet<I>& operator[](int idx) {
-		ASSERT(idx >= 0 && idx < 3);
+	Triplet<I>& operator [](int idx) 
+	{
+		assert(idx >= 0 && idx < 3);
 		return m[idx];
 	}
 
-	I determinant() const {
+	I determinant() const 
+	{
 		return
 			  m[0].x * (m[1].y * m[2].z - m[1].z * m[2].y)
 			+ m[0].y * (m[1].z * m[2].x - m[1].x * m[2].z)
 			+ m[0].z * (m[1].x * m[2].y - m[1].y * m[2].x);
 	}
 
-	Triplet<I> centroid() const {
+	Triplet<I>& centroid() const 
+	{
 		return m[0] + m[1] + m[2];
 	}
 
 	//	Check whether all 3 columns are coprime and the row sums are coprime.
-	bool isCoprime() const {
-
+	bool isCoprime() const 
+	{
 		// if a column has a common factor greater than 1,
 		// then the determinant will be a multiple of that factor.
-		if(determinant() != 1) {
+		if(determinant() != 1) 
+		{
 			return false;
 		}
-		ASSERT(m[0].isCoprime() && m[1].isCoprime() && m[2].isCoprime());
+		assert(m[0].isCoprime() && m[1].isCoprime() && m[2].isCoprime());
 
 		// can this be replaced with a simple check that the determinant is 1? "unimodular"
 
-		if(!centroid().isCoprime()) {
+		auto ctr = centroid();
+		if(!ctr.isCoprime()) 
+		{
 			return false;
 		}
 
-		ASSERT(determinant() == 1);
+		assert(determinant() == 1);
 		return true;
 	}
 
 	//	matrix forms proper, non-collinear, left-winding triangle
-	inline bool isTriangle() const {
+	inline bool isTriangle() const 
+	{
 		return leftOf(m[0], m[1], m[2]) == 1;
 	}
 
@@ -382,7 +494,8 @@ public:
 	//	AKA pointInTriangle
 	//	returns true if the point is inside this triangle or on an edge or vertex
 	//
-	bool containsPoint(const Triplet<I> &pt) const {
+	bool containsPoint(const Triplet<I> &pt) const
+	{
 		return leftOf(pt, m[0], m[1]) >= 0
 			&& leftOf(pt, m[1], m[2]) >= 0
 			&& leftOf(pt, m[2], m[0]) >= 0;
@@ -393,7 +506,8 @@ public:
 	//	returns true if {tri} is contained entirely within this triangle.
 	//	edges and vertices may touch, so x.containsTriangle(x) would return true.
 	//
-	bool containsTriangle(const TripletTriangle<I> &tri) const {
+	bool containsTriangle(const TripletTriangle<I> &tri) const
+	{
 		return containsPoint(tri[0])
 			&& containsPoint(tri[1])
 			&& containsPoint(tri[2]);
@@ -407,18 +521,55 @@ public:
 	//	- columns form left-winding triangle
 	//
 
-	inline void merge(int fromCol, int toCol) {
-		ASSERT(fromCol != toCol);
-		ASSERT(fromCol >= 0 && fromCol < 3 && toCol >= 0 && toCol < 3);
+	inline bool merge(int fromCol, int toCol) 
+	{
+		assert(fromCol != toCol);
+		assert(fromCol >= 0 && fromCol < 3 && toCol >= 0 && toCol < 3);
+		if(!m[fromCol]) return false;
+		if(!m[toCol]) return false;
 		m[toCol] += m[fromCol];
 		++depth;
-		ASSERT(isCoprime());
-		ASSERT(isTriangle());
+		//assert(isCoprime());
+		//assert(isTriangle());
+		return true;
 	}
 
-	inline void mergeAll(int toCol) {
-		depth += 2;
-		m[toCol] = centroid();
+	//inline void mergeAll(int toCol)
+	//{
+	//	depth += 2;
+	//	m[toCol] = centroid();
+	//}
+
+	//	collapse: aggregates two columns by adding; sets a column to zeros
+	//	decreases dimensionality, leaving centroid unchanged
+	inline bool collapse(int ai, int bi)
+	{
+		Triplet<I> before = this->centroid();
+		assert(before.isCoprime());
+
+		assert(ai != bi);
+		assert(ai >= 0 && ai < 3 && bi >= 0 && bi < 3);
+		if(!m[ai] && !m[bi])
+			return false;
+
+		auto otherCol = m[3 - ai - bi];
+		// [0]=other, [1]=[from]+[to]
+		auto colsum = m[ai] + m[bi];
+		m[0] = colsum;
+		m[1] = otherCol;
+		m[2] = { 0,0,0 };
+
+		Triplet<I> ctr = this->centroid();
+		assert(ctr.isCoprime());
+
+		//depth += 1;
+		return true;
+	}
+
+	inline void mergeAll()
+	{
+		depth += 1;
+		m[0] = centroid();
 	}
 
 	// replaces this triangle with one of its sextants.
@@ -427,7 +578,8 @@ public:
 	// - remaining vertex moves to centroid.
 	//
 	// same as merge(p, s); merge(s, t);
-	inline void merge3(int primary, int secondary) {
+	inline void merge3(int primary, int secondary) 
+	{
 		// before: x, y, z
 		// after: x, x+y, x+y+z
 		merge(primary, secondary);
@@ -437,64 +589,99 @@ public:
 	// creates triangle from midpoints--central quadrant
 	// this is a counterexample--breaking the sequential column-merge restriction
 	// causes the centroid to become non-coprime
-	void mergeCenter() {
+	void mergeCenter() 
+	{
 		auto col0 = m[0];
 		m[0] += m[1];
 		m[1] += m[2];
 		m[2] += col0;
 		++depth;
-		ASSERT(isCoprime());
-		ASSERT(isTriangle());
+		assert(isCoprime());
+		assert(isTriangle());
 	}
 
 	// rotate columns one to the right. preserves triangle invariants.
-	void rotate() {
+	void rotate() 
+	{
 		auto temp = m[2];
 		m[2] = m[1];
 		m[1] = m[0];
 		m[0] = temp;
 	}
 
-	inline bool operate(char op, const TripletTriangle<I> &src) {
+	inline bool operate(char op, const TripletTriangle<I> &src) 
+	{
 		*this = src;
 		return operate(op);
 	}
 
-	bool operate(char op) {
-		switch(op) {
-		case 'a': this->merge(0, 1); break;
-		case 'b': this->merge(1, 2); break;
-		case 'c': this->merge(2, 0); break;
-		case 'A': this->merge(1, 0); break;
-		case 'B': this->merge(2, 1); break;
-		case 'C': this->merge(0, 2); break;
-		case 'x': this->merge3(0, 1); break;
-		case 'y': this->merge3(1, 2); break;
-		case 'z': this->merge3(2, 0); break;
-		case 'X': this->merge3(0, 2); break;
-		case 'Y': this->merge3(1, 0); break;
-		case 'Z': this->merge3(2, 1); break;
-		case 'i': this->mergeCenter(); break;	// center quadrant: INVALID
-		case 'j': this->merge(0, 1); this->merge(0, 2); break;	// X corner quadrant
-		case 'k': this->merge(1, 0); this->merge(1, 2); break;	// Y corner quadrant
-		case 'l': this->merge(2, 1); this->merge(2, 0); break;	// Z corner quadrant
-		case 'm': this->merge(0, 1); this->merge(2, 0); this->merge(1, 2); rotate(); break;	// X-ward inner 12th, rotated for aesthetics
-		case 'n': this->merge(1, 2); this->merge(0, 1); this->merge(2, 0); rotate(); break;	// Y-ward inner 12th
-		case 'o': this->merge(2, 0); this->merge(1, 2); this->merge(0, 1); rotate(); break;	// Z-ward inner 12th
-		case '1': this->mergeAll(0); break;
-		case '2': this->mergeAll(1); break;
-		case '3': this->mergeAll(2); break;
-		default:
-			return false;
+	bool operate(char op) 
+	{
+		switch(op) 
+		{
+			// the 6 basic transforms: each divides the parent triangle in half
+			case 'a': return this->merge(0, 1); break;
+			case 'b': return this->merge(1, 2); break;
+			case 'c': return this->merge(2, 0); break;
+			case 'A': return this->merge(1, 0); break;
+			case 'B': return this->merge(2, 1); break;
+			case 'C': return this->merge(0, 2); break;
+			// cascade merges
+			// transforms triangle to one of its parent's sextants
+			// the 6 aggregate transforms: each defines one sixth of the parent triangle
+			case 'x': this->merge3(0, 1); break;
+			case 'y': this->merge3(1, 2); break;
+			case 'z': this->merge3(2, 0); break;
+			case 'X': this->merge3(0, 2); break;
+			case 'Y': this->merge3(1, 0); break;
+			case 'Z': this->merge3(2, 1); break;
+			// alternate sixth division: 3 corner quadrants (like a Sierpinski triangle), 3 inner triangle thirds
+			case 'j': this->merge(0, 1); this->merge(0, 2); break;	// X corner quadrant
+			case 'k': this->merge(1, 0); this->merge(1, 2); break;	// Y corner quadrant
+			case 'l': this->merge(2, 1); this->merge(2, 0); break;	// Z corner quadrant
+			case 'm': this->merge(0, 1); this->merge(2, 0); this->merge(1, 2); rotate(); break;	// X-ward inner 12th, rotated for aesthetics
+			case 'n': this->merge(1, 2); this->merge(0, 1); this->merge(2, 0); rotate(); break;	// Y-ward inner 12th
+			case 'o': this->merge(2, 0); this->merge(1, 2); this->merge(0, 1); rotate(); break;	// Z-ward inner 12th
+			// thirds
+			//case 'u': this->mergeAll(0); break;
+			//case 'v': this->mergeAll(1); break;
+			//case 'w': this->mergeAll(2); break;
+			// dimensionality collapse
+			// returns false if one of the columns is zero
+			case '1': return this->collapse(0, 1); break;
+			case '2': return this->collapse(1, 2); break;
+			case '3': return this->collapse(2, 0); break;
+			// an example of an invalid transform
+			//case 'i': this->mergeCenter(); break;	// center quadrant: INVALID
+			default:
+				return false;
 		}
 
 		return true;
 	}
 
-	// returns sextant signature of point.
+	// returns sextant classification of point.
 	// characterizes point as left of (-1), right of (+1), or on (0)
 	// each of the 3 median lines.
-	int getSextant(const Triplet<I> &pt) const {
+	// returns 4-byte value to be interpreted like "-+0"
+	SexClass getSextant(const Triplet<I> &pt) const
+	{
+		// centroid
+		Triplet<I> ctr = this->centroid();
+		assert(ctr.isCoprime());
+
+		if(numColumns() == 2)
+		{
+			// pt better be on the line XY
+			// figure out whether pt is more toward X or Y than ctr.
+			// (pt - ctr) dot (x - ctr)
+			int dotx = (pt - ctr).dot(m[0] - ctr);
+			if(dotx == 0)
+				return SEX00;
+			if(dotx > 0)
+				return SEXX0;
+			return SEXY0;
+		}
 
 		// compute the point's side relative to the three triangle medians.
 		//
@@ -504,47 +691,46 @@ public:
 		// This projection preserves straight line properties... there's probably
 		// a mathematically simpler way to do this without projection.
 
-		// centroid
-		Triplet<I> ctr = this->centroid();
+		//// reciprocals for 2d projections
+		//I psum = pt.sum(), asum = m[0].sum(), bsum = m[1].sum(), csum = m[2].sum(), msum = ctr.sum();
 
-		// reciprocals for 2d projections
-		I psum = pt.sum(), asum = m[0].sum(), bsum = m[1].sum(), csum = m[2].sum(), msum = ctr.sum();
+		//// project to (x/(x+y+z), y/(x+y+z))
+		//// division is delayed, so these values are scaled by ?sum
+		//I ax = m[0].x, ay = m[0].y;
+		//I bx = m[1].x, by = m[1].y;
+		//I cx = m[2].x, cy = m[2].y;
+		//I px = pt.x, py = pt.y;
+		//I mx = ctr.x, my = ctr.y;
+		//I temp;
 
-		// project to (x/(x+y+z), y/(x+y+z))
-		// division is delayed, so these values are scaled by ?sum
-		I ax = m[0].x, ay = m[0].y;
-		I bx = m[1].x, by = m[1].y;
-		I cx = m[2].x, cy = m[2].y;
-		I px = pt.x, py = pt.y;
-		I mx = ctr.x, my = ctr.y;
-		I temp;
-
-		// calculate cross-products to characterize P by edges MA, MB, MC
-		temp = (msum*ax - asum*mx)*(msum*py - psum*my) 
-			 - (msum*ay - asum*my)*(msum*px - psum*mx);
+		//// calculate cross-products to characterize P by edges MA, MB, MC
+		//temp = (msum*ax - asum*mx)*(msum*py - psum*my) 
+		//	 - (msum*ay - asum*my)*(msum*px - psum*mx);
 		int maxmp = leftOf(ctr, m[0], pt);
-		ASSERT(sign(temp) == maxmp);
+		//assert(sign(temp) == maxmp);
 
-		temp = (msum*bx - bsum*mx)*(msum*py - psum*my) - (msum*by - bsum*my)*(msum*px - psum*mx);
+		//temp = (msum*bx - bsum*mx)*(msum*py - psum*my) - (msum*by - bsum*my)*(msum*px - psum*mx);
 		int mbxmp = leftOf(ctr, m[1], pt);
-		ASSERT(sign(temp) == mbxmp);
+		//assert(sign(temp) == mbxmp);
 
-		temp = (msum*cx - csum*mx)*(msum*py - psum*my) - (msum*cy - csum*my)*(msum*px - psum*mx);
+		//temp = (msum*cx - csum*mx)*(msum*py - psum*my) - (msum*cy - csum*my)*(msum*px - psum*mx);
 		int mcxmp = leftOf(ctr, m[2], pt);
-		ASSERT(sign(temp) == mcxmp);
+		//assert(sign(temp) == mcxmp);
 
 		//cerr << " {" << signchar(maxmp) << signchar(mbxmp) << signchar(mcxmp) << "}\n";
 
-		char sex[4] = { 0,0,0,0 };
-		sex[0] = signchar(maxmp);
-		sex[1] = signchar(mbxmp);
-		sex[2] = signchar(mcxmp);
-		return *((int*)(sex));
+		SexClass sex(0);
+
+		sex.asChar[0] = signchar(maxmp);
+		sex.asChar[1] = signchar(mbxmp);
+		sex.asChar[2] = signchar(mcxmp);
+		return sex;
 	}
 
 	// matrix functions..
 
-	TripletTriangle transpose() const {
+	TripletTriangle transpose() const 
+	{
 		TripletTriangle tri(*this);
 		tri.m[0].y = m[1].x;
 		tri.m[0].z = m[2].x;
@@ -555,7 +741,8 @@ public:
 		return tri;
 	}
 
-	void transpose(const TripletTriangle &tri) {
+	void transpose(const TripletTriangle &tri) 
+	{
 		*this = tri;
 		m[0].y = tri.m[1].x;
 		m[0].z = tri.m[2].x;
@@ -567,8 +754,8 @@ public:
 
 	// comparators
 
-	int operator == (const TripletTriangle &tri) const {
-
+	int operator == (const TripletTriangle &tri) const 
+	{
 		return m[0] == tri.m[0] && m[1] == tri.m[1] && m[2] == tri.m[2];
 	}
 
@@ -579,7 +766,8 @@ public:
 	// that is, if x < y, it's guaranteed that !(y<x).
 	// if !(x<y) and !(y<x), then x==y.
 	// This ordering assigns lower values to ...
-	inline int operator < (const TripletTriangle &tri) const {
+	inline int operator < (const TripletTriangle &tri) const 
+	{
 		int cmp = compare(tri);
 		return (cmp > 0);
 	}
@@ -588,8 +776,8 @@ public:
 	// 1 if {this} is lower priority than {tri},
 	// -1 if {this} is higher priority than {tri},
 	// 0 if {this} and {tri} are equal--the same matrix/triangle.
-	int compare(const TripletTriangle &tri) const {
-
+	int compare(const TripletTriangle &tri) const 
+	{
 		// smaller depth means higher priority
 		if(depth < tri.depth) {
 			return -1;
@@ -613,7 +801,8 @@ public:
 
 // returns true if the two segments intersect, including endpoint intersections
 template<class I>
-bool segmentsIntersect(const Triplet<I> &a, const Triplet<I> &b, const Triplet<I> &c, const Triplet<I> &d) {
+bool segmentsIntersect(const Triplet<I> &a, const Triplet<I> &b, const Triplet<I> &c, const Triplet<I> &d) 
+{
 	int abc = leftOf(a, b, c);
 	int abd = leftOf(a, b, d);
 	if(abc*abd == 1) {
@@ -639,7 +828,8 @@ bool segmentsIntersect(const Triplet<I> &a, const Triplet<I> &b, const Triplet<I
 }
 
 template<class I>
-bool trianglesIntersect(const TripletTriangle<I> &a, const TripletTriangle<I> &b) {
+bool trianglesIntersect(const TripletTriangle<I> &a, const TripletTriangle<I> &b) 
+{
 	// if any vertex is inside the other triangle, the triangles overlap
 
 	if(    b.containsPoint(a[0])
@@ -669,7 +859,8 @@ bool trianglesIntersect(const TripletTriangle<I> &a, const TripletTriangle<I> &b
 // and whose radius is {radius} at its intersection with the plane x+y+z=1
 // radius
 template<class I>
-bool pointInCircle(const Triplet<I> &point, const Triplet<I> &ctr, float radius) {
+bool pointInCircle(const Triplet<I> &point, const Triplet<I> &ctr, float radius) 
+{
 	// project to x+y+z=1
 	float ctrSum = ctr.sum();
 	float vCtr[3] = { ctr.x / ctrSum, ctr.y / ctrSum, ctr.z / ctrSum };
@@ -683,24 +874,14 @@ bool pointInCircle(const Triplet<I> &point, const Triplet<I> &ctr, float radius)
 }
 
 template<class F>
-inline F dot3(const F *a, const F *b) {
-	return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-}
-
-template<class F>
-inline F sumsq3(const F *a) {
-	return a[0] * a[0] + a[1] * a[1] + a[2] * a[2];
-}
-
-template<class F>
 inline F distsq3(const F *a, const F *b) {
 	F ab[3] = { b[0] - a[0], b[1] - a[1], b[2] - a[2] };
 	return sumsq3(ab);
 }
 
 template<class F>
-bool lineSegmentIntersectsCircle(const F *a, const F *b, const F *ctr, F radius) {
-
+bool lineSegmentIntersectsCircle(const F *a, const F *b, const F *ctr, F radius) 
+{
 	F rsq = radius * radius;
 	
 	// test both endpoints
@@ -733,7 +914,8 @@ bool lineSegmentIntersectsCircle(const F *a, const F *b, const F *ctr, F radius)
 }
 
 template<class I>
-bool lineSegmentIntersectsCircle(const Triplet<I> &a, const Triplet<I> &b, const Triplet<I> &ctr, float radius) {
+bool lineSegmentIntersectsCircle(const Triplet<I> &a, const Triplet<I> &b, const Triplet<I> &ctr, float radius) 
+{
 	// distsq = |ta + (1-t)b - ctr|^2
 	// = (t(a-b) + b - ctr)^2
 	// = sum[.=x,y,z] t^2 (a-b).^2 + 2t (a-b).(b-ctr). + (b-ctr).^2
@@ -799,29 +981,9 @@ ostream& operator << (ostream &out, const TripletTriangle<I> &m) {
 
 //
 
-// 13 possible sextant classifications:
-// 00: centroid: single point (0 d.f.)
-// X0, Y0, Z0: edge between centroid and vertex (1 d.f.)
-// YZ, ZX, XY: edge opposite vertex X, Y, and Z, respectively (1 d.f.)
-// XP, XN: triangular regions left (P) and right (N) of edge between centroid and vertex X (2 d.f.)
-#define SEXX0 *((const int*)("0-+"))
-#define SEXXN *((const int*)("+-+"))
-#define SEXXY *((const int*)("+-0"))
-#define SEXYP *((const int*)("+--"))
-#define SEXY0 *((const int*)("+0-"))
-#define SEXYN *((const int*)("++-"))
-#define SEXYZ *((const int*)("0+-"))
-#define SEXZP *((const int*)("-+-"))
-#define SEXZ0 *((const int*)("-+0"))
-#define SEXZN *((const int*)("-++"))
-#define SEXZX *((const int*)("-0+"))
-#define SEXXP *((const int*)("--+"))
-#define SEX00 *((const int*)("000"))
-
-
 template<class I>
-class TripletSearch {
-
+class TripletSearch
+{
 public:
 	// search params
 	Triplet<I> m_target;
@@ -833,6 +995,7 @@ public:
 
 	// search results
 	vector<string> m_paths;
+	string m_bestPath;
 	int m_countMaxDepth;
 	int m_countMaxHeight;
 	int m_countDeadEnds;
@@ -853,6 +1016,7 @@ public:
 	bool findAll(const Triplet<I> &target) {
 		m_target = target;
 		m_paths.clear();
+		m_bestPath.clear();
 		m_countMaxDepth = 0;
 		m_countMaxHeight = 0;
 		m_countDeadEnds = 0;
@@ -869,7 +1033,7 @@ public:
 private:
 	bool findAllR(const TripletTriangle<I>& triangle, string path, unsigned int depth) {
 		Triplet<I> ctr = triangle.centroid();
-		ASSERT(ctr.isCoprime());
+		assert(ctr.isCoprime());
 		if(ctr == m_target) {
 			path = path + "-ctr";
 			if(std::find(m_paths.begin(), m_paths.end(), path) == m_paths.end()) {
@@ -886,6 +1050,7 @@ private:
 		Triplet<I> p12 = triangle[1] + triangle[2];
 		Triplet<I> p02 = triangle[0] + triangle[2];
 
+		// is this step necessary? seems that every triple should eventually be a vertex..
 		if(p01 == m_target) { m_paths.push_back(path + "-p01"); return true; }
 		if(p12 == m_target) { m_paths.push_back(path + "-p12"); return true; }
 		if(p02 == m_target) { m_paths.push_back(path + "-p02"); return true; }
@@ -913,14 +1078,17 @@ public:
 	const int ERROR_INTERNAL = -9;
 
 	// sextant tree search. each recursion drills down into 1/6 of the parent search area.
-	int search(const Triplet<I> &target) {
+	int search(const Triplet<I> &target)
+	{
 		m_target = target;
 		m_paths.clear();
+		m_bestPath.clear();
 		m_countMaxDepth = 0;
 		m_countMaxHeight = 0;
 		m_countDeadEnds = 0;
 
-		if(m_bVerbose) {
+		if(m_bVerbose) 
+		{
 			cout << "--- Sextant search for " << m_target << " Depth: " << m_maxDepth << " ---\n";
 		}
 
@@ -933,60 +1101,90 @@ public:
 	}
 
 private:
-	int searchR(const TripletTriangle<I> &triangle, string path, unsigned int depth) {
-		Triplet<I> ctr = triangle.centroid();
-		ASSERT(ctr.isCoprime());
-		if(!(ctr.isCoprime())) {
-			cerr << "\n -- TEST FAILED: \n" << triangle << endl;
-			return ERROR_INTERNAL;
+	int searchR(const TripletTriangle<I> &triangle, string path, unsigned int depth) 
+	{
+		if(triangle.isZero())
+		{
+			return 0;
 		}
 
-		if(!triangle.containsPoint(m_target)) {
+		Triplet<I> ctr = triangle.centroid();
+		assert(ctr.isCoprime());
+		//if(!(ctr.isCoprime())) {
+		//	cerr << "\n -- TEST FAILED: \n" << triangle << endl;
+		//	return ERROR_INTERNAL;
+		//}
+
+		if(!triangle.containsPoint(m_target)) 
+		{
 			cerr << ".. Rejecting[" << depth << "]..\n";
 			cerr << triangle;
-			return ERROR_INTERNAL;
+			return 0;
 		}
 
 		if(!triangle[0].precedes(m_target) &&
 			!triangle[1].precedes(m_target) &&
-			!triangle[2].precedes(m_target)) {
+			!triangle[2].precedes(m_target)) 
+		{
 			cerr << " ** wrong turn somewhere. no vertex precedes " << m_target << endl;
 			cerr << triangle;
 			return ERROR_INTERNAL;
 		}
 
-		if(m_bVerbose) {
-			cout << ".. Searching[" << depth << "]..\n";
+		if(m_bVerbose) 
+		{
+			cout << ".. Searching[" << depth << "].. " << path << "\n";
 			cout << triangle;
 		}
 
-		int sextant = triangle.getSextant(m_target);
+		bool found = false;		
 
-		int foundCount = 0;
+		/* // method 1		
+		// check vertices?
+		if(triangle[0] == m_target) { found = true; m_paths.push_back(path + "-vX"); return 1; }
+		if(triangle[1] == m_target) { found = true; m_paths.push_back(path + "-vY"); return 1; }
+		if(triangle[2] == m_target) { found = true; m_paths.push_back(path + "-vZ"); return 1; }
 
-		// compute the triangle edge midpoints
-		Triplet<I> p01 = triangle[0] + triangle[1];
-		Triplet<I> p12 = triangle[1] + triangle[2];
-		Triplet<I> p02 = triangle[0] + triangle[2];
+		//// compute the triangle edge midpoints
+		//Triplet<I> p01 = triangle[0] + triangle[1];
+		//Triplet<I> p12 = triangle[1] + triangle[2];
+		//Triplet<I> p02 = triangle[0] + triangle[2];
 
-		bool found = false;		// shortcut... unnecessary?
-		if(p01 == m_target) { found = true; m_paths.push_back(path + "-p01"); }
-		if(p12 == m_target) { found = true; m_paths.push_back(path + "-p12"); }
-		if(p02 == m_target) { found = true; m_paths.push_back(path + "-p02"); }
+		//if(p01 == m_target) { found = true; m_paths.push_back(path + "-p01"); }
+		//if(p12 == m_target) { found = true; m_paths.push_back(path + "-p12"); }
+		//if(p02 == m_target) { found = true; m_paths.push_back(path + "-p02"); }
+*/
 
-		//if(ctr == m_target) { 
-		if(sextant == SEX00) {
-			found = true;
-			m_paths.push_back(path + "-ctr");
+		// method 2
+		if(triangle.numColumns() == 1)
+		{
+			found=true;
+			m_paths.push_back(path+".");
 			return 1;
 		}
 
+		SexClass sextant = triangle.getSextant(m_target);
+
+		int foundCount = 0;
+
+/*
+		// method 1
+		if(sextant.asInt == SEX00) {
+			found = true;
+			m_paths.push_back(path + "-ctr");
+			return 1;
+		}//*/
+
+
 		if(!found)
 		{
-			if(depth >= m_maxDepth) {
+			if(depth >= m_maxDepth) 
+			{
 				++m_countMaxDepth;
+				m_bestPath = (path + "...");
 				return 0;
 			}
+
 			/*
 			// build 6 subregions, characterize point: deprecate
 			TripletTriangle<I> mx('x', triangle); int inmx = mx.containsPoint(m_target);
@@ -999,9 +1197,11 @@ private:
 			*/
 
 			if(m_bVerbose) {
-				cout << "Sextant: " << ((char*)(&sextant)) << endl;
+				cout << "Sextant: " << sextant.asChar << endl;
 			}
 
+			/*
+			//	METHOD ONE
 			// note that mirror symmetry is broken here, to avoid duplicate paths to edge points:
 			// points on edges (other than the centroid) are resolved to neighboring regions in a
 			// counterclockwise fashion.
@@ -1014,25 +1214,70 @@ private:
 			// - on reaching a median, collapse to 2 points--exclude one of the other vertices 
 			//   from all further calculations. this reduces to a modified rational tree traversal.
 
-			if(sextant == SEXX0 || sextant == SEXXN) {
+			if(sextant == SEXX0 || sextant == SEXXN)
+			{
 				foundCount += searchR(TripletTriangle<I>('x', triangle), path + 'x', depth + 1);
 			}
-			else if(sextant == SEXXY || sextant == SEXYP) {
+			else if(sextant == SEXXY || sextant == SEXYP)
+			{
 				foundCount += searchR(TripletTriangle<I>('Y', triangle), path + 'Y', depth + 1);
 			}
-			else if(sextant == SEXY0 || sextant == SEXYN) {
+			else if(sextant == SEXY0 || sextant == SEXYN)
+			{
 				foundCount += searchR(TripletTriangle<I>('y', triangle), path + 'y', depth + 1);
 			}
-			else if(sextant == SEXYZ || sextant == SEXZP) {
+			else if(sextant == SEXYZ || sextant == SEXZP)
+			{
 				foundCount += searchR(TripletTriangle<I>('Z', triangle), path + 'Z', depth + 1);
 			}
-			else if(sextant == SEXZ0 || sextant == SEXZN) {
+			else if(sextant == SEXZ0 || sextant == SEXZN)
+			{
 				foundCount += searchR(TripletTriangle<I>('z', triangle), path + 'z', depth + 1);
 			}
-			else if(sextant == SEXZX || sextant == SEXXP) {
+			else if(sextant == SEXZX || sextant == SEXXP)
+			{
 				foundCount += searchR(TripletTriangle<I>('X', triangle), path + 'X', depth + 1);
 			}
-			else {
+			else
+			{
+				cerr << "!!??\n";
+			}
+			//*/
+
+			//	METHOD TWO
+
+			if(sextant == SEX00)
+			{
+				found = true;
+				m_paths.push_back(path + "-ctr");
+				return 1;
+			}
+			else if(sextant == SEXXN)
+				foundCount += searchR( triangle + 'x', path + 'x',		depth + 1);
+			else if(sextant == SEXYP)
+				foundCount += searchR( triangle + 'Y', path + 'Y',		depth + 1);
+			else if(sextant == SEXYN)
+				foundCount += searchR( triangle + 'y', path + 'y',		depth + 1);
+			else if(sextant == SEXZP)
+				foundCount += searchR( triangle + 'Z', path + 'Z',		depth + 1);
+			else if(sextant == SEXZN)
+				foundCount += searchR( triangle + 'z', path + 'z',		depth + 1);
+			else if(sextant == SEXXP)
+				foundCount += searchR( triangle + 'X', path + 'X',		depth + 1);
+			else if(sextant == SEXX0) 	// on line between X and ctr: merge YZ->X, then toward Y
+				foundCount += searchR( triangle + '2' + 'A', path + "{YZ}A",	depth + 1);
+			else if(sextant == SEXYZ) 	// on line between ctr and YZ's midpoint: merge YZ->X, then toward X
+				foundCount += searchR( triangle + '2' + 'a', path + "{YZ}a",	depth + 1);
+			else if(sextant == SEXY0)	// on line between Y and ctr: merge XZ->X, then toward Y
+				foundCount += searchR( triangle + '3' + 'A', path + "{ZX}A",	depth + 1);
+			else if(sextant == SEXZX)	// on line between ctr and XZ's midpoint: merge XZ->X, then toward X
+				foundCount += searchR( triangle + '3' + 'a', path + "{ZX}a",	depth + 1);
+			else if(sextant == SEXZ0)	// on line between Z and ctr: merge XY->X, then toward Y
+				foundCount += searchR( triangle + '1' + 'A', path + "{XY}A",	depth + 1);
+			else if(sextant == SEXXY)	// on line between ctr and XY's midpoint: merge YZ->X, then toward X
+				foundCount += searchR( triangle + '1' + 'a', path + "{XY}a",	depth + 1);
+			else
+			{
 				cerr << "!!??\n";
 			}
 		}
@@ -1068,10 +1313,10 @@ public:
 
 	bool enumerate() {
 
-		ASSERT(m_maxDepth >= 0 && m_maxDepth < 1000);
-		ASSERT(m_maxHeight > 1);
-		//ASSERT(m_clip.isCoprime());
-		ASSERT(m_clip.isTriangle());
+		assert(m_maxDepth >= 0 && m_maxDepth < 1000);
+		assert(m_maxHeight > 1);
+		//assert(m_clip.isCoprime());
+		assert(m_clip.isTriangle());
 
 		cerr << "Enumerating depth: " << m_maxDepth << " max height: " << m_maxHeight
 			<< " max results: " << m_maxNumEnumerationResults
@@ -1161,7 +1406,7 @@ private:
 		Triplet<I> p12 = triangle[1] + triangle[2];
 		Triplet<I> p02 = triangle[0] + triangle[2];
 		Triplet<I> ctr = triangle.centroid();
-		ASSERT(ctr.isCoprime());
+		assert(ctr.isCoprime());
 
 		enumerateCheck(p01, path + "-p01", depth);
 		enumerateCheck(p12, path + "-p12", depth);
@@ -1184,30 +1429,31 @@ private:
 
 	public:
 
-	static int runTests() {
+	static int runTests() 
+	{
 		// GCD algs
 		{
 			int nn[12] = { 16, 16, 16, 27, 27, 9, 0, 0, 0, 8, 8, 8 };
-			ASSERT(::gcd(nn, 12) == 1);
+			assert(::gcd(nn, 12) == 1);
 			int mm[12] = { 48, 15, 12, 27, 27, 9, 0, 0, 0, 90, 24, 21 };
-			ASSERT(::gcd(mm, 12) == 3);
+			assert(::gcd(mm, 12) == 3);
 
-			ASSERT(::gcd(8, 1) == 1);
-			ASSERT(::gcd(0, 1) == 1);
-			ASSERT(::gcd(0, 8) == 8);
-			ASSERT(::gcd(40, 32) == 8);
-			ASSERT(::gcd(0, 0) == 0);
+			assert(::gcd(8, 1) == 1);
+			assert(::gcd(0, 1) == 1);
+			assert(::gcd(0, 8) == 8);
+			assert(::gcd(40, 32) == 8);
+			assert(::gcd(0, 0) == 0);
 
 			int n[3] = { 8, 8, 8 };
-			ASSERT(::gcd(n, 3) == 8);
+			assert(::gcd(n, 3) == 8);
 			n[2] = 5;
-			ASSERT(::gcd(n, 3) == 1);
+			assert(::gcd(n, 3) == 1);
 			n[2] = 0;
-			ASSERT(::gcd(n, 3) == 8);
+			assert(::gcd(n, 3) == 8);
 			n[1] = 0;
-			ASSERT(::gcd(n, 3) == 8);
+			assert(::gcd(n, 3) == 8);
 			n[0] = 0;
-			ASSERT(::gcd(n, 3) == 0);
+			assert(::gcd(n, 3) == 0);
 		}
 
 		// triangle algs
@@ -1220,12 +1466,12 @@ private:
 				int c = rand() % 3;
 				int d = (c + 1 + rand() % 2) % 3;
 				tri.merge(c, d);
-				ASSERT(tri.isCoprime());
+				assert(tri.isCoprime());
 				tri = tri.transpose();
 				c = rand() % 3;
 				d = (c + 1 + rand() % 2) % 3;
 				tri.merge(c, d);
-				ASSERT(tri.isCoprime());
+				assert(tri.isCoprime());
 			}
 		}
 
@@ -1240,51 +1486,51 @@ private:
 					stringstream str;
 					str << tri << " iscoprime: " << tri.isCoprime() << endl;
 					TRACE(str.str().c_str());
-					ASSERT(tri.isCoprime());
-					ASSERT(tri.transpose().isCoprime());
+					assert(tri.isCoprime());
+					assert(tri.transpose().isCoprime());
 					++count;
 				}
 			}
 		}
 
 		TripletTriangle<I> mBase;
-		ASSERT(mBase.isCoprime());
-		ASSERT(mBase.isTriangle());
-		ASSERT(leftOf(mBase[0], mBase[1], mBase[2]));
+		assert(mBase.isCoprime());
+		assert(mBase.isTriangle());
+		assert(leftOf(mBase[0], mBase[1], mBase[2]));
 
 		TripletTriangle<I> mTest1(vec3(15, 10, 8), vec3(6, 4, 3), vec3(25, 17, 14));
 		TripletTriangle<I> mTest2(vec3(15, 10, 8), vec3(21, 14, 11), vec3(46, 31, 25));
 		bool bb;
 
 		cout << "Test 1\n" << mTest1;
-		ASSERT(mTest1.isCoprime());
-		ASSERT(mTest1.isTriangle());
+		assert(mTest1.isCoprime());
+		assert(mTest1.isTriangle());
 		bb = mTest1.containsPoint(vec3(36, 24, 19));
-		ASSERT(bb);
+		assert(bb);
 
 		cout << "Test 2\n" << mTest2;
-		ASSERT(mTest2.isCoprime());
-		ASSERT(mTest2.isTriangle());
+		assert(mTest2.isCoprime());
+		assert(mTest2.isTriangle());
 		bb = mTest2.containsPoint(vec3(36, 24, 19));
-		ASSERT(bb);
+		assert(bb);
 
 		int signabc;
 		vec3 a(1, 1, 1), b(3, 1, 2), c(3, 2, 1), temp;
 		signabc = leftOf(a, b, c);
-		ASSERT(signabc == 1);
+		assert(signabc == 1);
 		cout << "leftof(" << a << " , " << b << " , " << c << " ): " << signabc << endl;
 		temp = a; a = b; b = temp;
 		signabc = leftOf(a, b, c);
-		ASSERT(signabc == -1);
+		assert(signabc == -1);
 		cout << "leftof(" << a << " , " << b << " , " << c << " ): " << signabc << endl;
 		a.set(1, 0, 0); b.set(0, 1, 0); c.set(0, 0, 1);
 		signabc = leftOf(a, b, c);
-		ASSERT(signabc == 1);
+		assert(signabc == 1);
 		cout << "leftof(" << a << " , " << b << " , " << c << " ): " << signabc << endl;
 		// collinear test
 		a.set(3, 3, 4); b.set(3, 4, 6); c.set(3, 5, 8);
 		signabc = leftOf(a, b, c);
-		ASSERT(signabc == 0);
+		assert(signabc == 0);
 		cout << "leftof(" << a << " , " << b << " , " << c << " ): " << signabc << endl;
 
 		TripletSearch<int> s;
@@ -1295,13 +1541,13 @@ private:
 				for(int k = 1; k <= 3; ++k) {
 					vec3 pt(i, j, k);
 					if(pt.isCoprime()) {
-						int sex = t.getSextant(pt);
-						cout << pt << " Sex: " << ((char*)(&sex));
+						SexClass sex = t.getSextant(pt);
+						cout << pt << " Sex: " << sex.asChar;
 
 						s.search(pt);
 						cout << " search: " << s.m_paths.size() << " paths";
 
-						ASSERT(s.m_paths.size() == 1);
+						assert(s.m_paths.size() == 1);
 
 						s.findAll(pt);
 						cout << " findAll: " << s.m_paths.size() << " paths found.\n";
@@ -1309,31 +1555,31 @@ private:
 				}
 			}
 		}
-		ASSERT(t.getSextant(vec3(1, 1, 1)) == *((int*)("000")));
-		ASSERT(t.getSextant(vec3(1, 1, 2)) == *((int*)("-+0")));
-		ASSERT(t.getSextant(vec3(1, 1, 3)) == *((int*)("-+0")));
-		ASSERT(t.getSextant(vec3(1, 2, 1)) == *((int*)("+0-")));
-		ASSERT(t.getSextant(vec3(1, 2, 2)) == *((int*)("0+-")));
-		ASSERT(t.getSextant(vec3(1, 2, 3)) == *((int*)("-+-")));
-		ASSERT(t.getSextant(vec3(1, 3, 1)) == *((int*)("+0-")));
-		ASSERT(t.getSextant(vec3(1, 3, 2)) == *((int*)("++-")));
-		ASSERT(t.getSextant(vec3(1, 3, 3)) == *((int*)("0+-")));
-		ASSERT(t.getSextant(vec3(2, 1, 1)) == *((int*)("0-+")));
-		ASSERT(t.getSextant(vec3(2, 1, 2)) == *((int*)("-0+")));
-		ASSERT(t.getSextant(vec3(2, 1, 3)) == *((int*)("-++")));
-		ASSERT(t.getSextant(vec3(2, 2, 1)) == *((int*)("+-0")));
-		ASSERT(t.getSextant(vec3(2, 2, 3)) == *((int*)("-+0")));
-		ASSERT(t.getSextant(vec3(2, 3, 1)) == *((int*)("+--")));
-		ASSERT(t.getSextant(vec3(2, 3, 2)) == *((int*)("+0-")));
-		ASSERT(t.getSextant(vec3(2, 3, 3)) == *((int*)("0+-")));
-		ASSERT(t.getSextant(vec3(3, 1, 1)) == *((int*)("0-+")));
-		ASSERT(t.getSextant(vec3(3, 1, 2)) == *((int*)("--+")));
-		ASSERT(t.getSextant(vec3(3, 1, 3)) == *((int*)("-0+")));
-		ASSERT(t.getSextant(vec3(3, 2, 1)) == *((int*)("+-+")));
-		ASSERT(t.getSextant(vec3(3, 2, 2)) == *((int*)("0-+")));
-		ASSERT(t.getSextant(vec3(3, 2, 3)) == *((int*)("-0+")));
-		ASSERT(t.getSextant(vec3(3, 3, 1)) == *((int*)("+-0")));
-		ASSERT(t.getSextant(vec3(3, 3, 2)) == *((int*)("+-0")));
+		assert(t.getSextant(vec3(1, 1, 1)).asInt == *((int*)("000")));
+		assert(t.getSextant(vec3(1, 1, 2)).asInt == *((int*)("-+0")));
+		assert(t.getSextant(vec3(1, 1, 3)).asInt == *((int*)("-+0")));
+		assert(t.getSextant(vec3(1, 2, 1)).asInt == *((int*)("+0-")));
+		assert(t.getSextant(vec3(1, 2, 2)).asInt == *((int*)("0+-")));
+		assert(t.getSextant(vec3(1, 2, 3)).asInt == *((int*)("-+-")));
+		assert(t.getSextant(vec3(1, 3, 1)).asInt == *((int*)("+0-")));
+		assert(t.getSextant(vec3(1, 3, 2)).asInt == *((int*)("++-")));
+		assert(t.getSextant(vec3(1, 3, 3)).asInt == *((int*)("0+-")));
+		assert(t.getSextant(vec3(2, 1, 1)).asInt == *((int*)("0-+")));
+		assert(t.getSextant(vec3(2, 1, 2)).asInt == *((int*)("-0+")));
+		assert(t.getSextant(vec3(2, 1, 3)).asInt == *((int*)("-++")));
+		assert(t.getSextant(vec3(2, 2, 1)).asInt == *((int*)("+-0")));
+		assert(t.getSextant(vec3(2, 2, 3)).asInt == *((int*)("-+0")));
+		assert(t.getSextant(vec3(2, 3, 1)).asInt == *((int*)("+--")));
+		assert(t.getSextant(vec3(2, 3, 2)).asInt == *((int*)("+0-")));
+		assert(t.getSextant(vec3(2, 3, 3)).asInt == *((int*)("0+-")));
+		assert(t.getSextant(vec3(3, 1, 1)).asInt == *((int*)("0-+")));
+		assert(t.getSextant(vec3(3, 1, 2)).asInt == *((int*)("--+")));
+		assert(t.getSextant(vec3(3, 1, 3)).asInt == *((int*)("-0+")));
+		assert(t.getSextant(vec3(3, 2, 1)).asInt == *((int*)("+-+")));
+		assert(t.getSextant(vec3(3, 2, 2)).asInt == *((int*)("0-+")));
+		assert(t.getSextant(vec3(3, 2, 3)).asInt == *((int*)("-0+")));
+		assert(t.getSextant(vec3(3, 3, 1)).asInt == *((int*)("+-0")));
+		assert(t.getSextant(vec3(3, 3, 2)).asInt == *((int*)("+-0")));
 
 		// test 1: generate all coprime triples up to a limit, and ensure a unique path exists to each
 
@@ -1377,7 +1623,7 @@ private:
 				int fromCol = rand() % 3;
 				int toCol = (fromCol + 1+rand() % 1) % 3;
 				x.merge(fromCol, toCol);
-				ASSERT(x.centroid().isCoprime());
+				assert(x.centroid().isCoprime());
 			}
 		}
 
