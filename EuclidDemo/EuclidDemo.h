@@ -54,17 +54,17 @@ enum CameraMode
 class EuclidDemoSettings 
 {
 public:
-	int m_nDrawVertices = 1;
-	float m_fVertexSize = 0.05f;
-	int m_nDrawEdges = 1;
-	int m_nDrawBranches = 0;
-	bool m_bFillTriangles = true;
-	bool m_bDrawTarget = true;
-	bool m_bDrawStats = true;
-	float m_alpha = 1;
+	int nDrawVertices = 1;
+	float fVertexSize = 0.05f;
+	int nDrawEdges = 1;
+	int nDrawBranches = 0;
+	bool bFillTriangles = true;
+	bool bDrawTarget = true;
+	bool bDrawStats = true;
+	float fAlpha = 1;
 
-	CameraMode m_nCameraMode = CameraMode::TARGET;
-	double m_fFOV = 120.0;
+	CameraMode nCameraMode = CameraMode::TARGET;
+	double fFOV = 120.0;
 	int multiScreenMode = 0;	// 0 = single drawing window across screens; 1 = individual window per monitor
 	int nSimulationSpeed = 3;
 	int nRandomizeTimer = 90;	// auto-change every 90 seconds
@@ -73,7 +73,7 @@ public:
 	//weighted_palette<rgb> m_palette;
 	weighted_palette<COLORREF> m_palette;
 
-	float m_fRandomPaletteProbability = 0.5;
+	float fRandomPaletteProbability = 0.5;
 
 	double TRI_TIME_LIFESPAN = 30.0;
 	int m_nMaxTriangleDepth = 25;
@@ -244,7 +244,8 @@ public:
 	}
 };
 
-interface IScreensaver {
+interface IScreensaver 
+{
 	void initSaver(HWND hwnd);
 	void handleDestroy(HWND hwnd);
 	LONG handleKeyDown(WPARAM keyCode, unsigned char scanCode, unsigned short repeatCount, unsigned char previousKeyState);
@@ -281,26 +282,27 @@ private:
 	std::map<TripletTriangle<int>, TriangleNode, TNodeHighDepthPriority> m_allTriangles;
 	
 	// target find
+	TripletSearch<int> m_search;
 	TriangleNode m_userNode;
-	TripletTriangle<int> m_targetTriangle;
-	Triplet<int> m_targetCenter;
-	float m_targetRadius = 0;
-	char m_ops[40] =
-		//"XxYyZz";	// proper sextant enumeration
-		"XxYyZz123";	// complete enumeration
-		//"uvw";		// thirds enumeration
-		//"jkl";		// sierpinski (outer 3 quarters)
-		//"mno";		// inner sixths
-		//"jklmno";		// outer/inner sixths
-		//"jklXxYyZz";
-		//"XYZjkl";
-		//"Xxyz";
+	//TripletTriangle<int> m_targetTriangle;
+	//Triplet<int> m_targetCenter;
+	//float m_targetRadius = 0;
+	//char m_ops[40] =
+	//	"XxYyZz";	// proper sextant enumeration
+	//	//"XxYyZz123";	// complete enumeration
+	//	//"uvw";		// thirds enumeration
+	//	//"jkl";		// sierpinski (outer 3 quarters)
+	//	//"mno";		// inner sixths
+	//	//"jklmno";		// outer/inner sixths
+	//	//"jklXxYyZz";
+	//	//"XYZjkl";
+	//	//"Xxyz";
 
-	enum class growth_enum { 
-		NONE = 0, TRIANGLE = 1, CIRCLE, FILL, POINT_SEARCH, STOCHASTIC 
-	};
-	growth_enum m_targetShape = growth_enum::STOCHASTIC;
-	static std::map<growth_enum, string> s_growth_enum_names;
+	//enum class GrowthEnum { 
+	//	NONE = 0, TRIANGLE = 1, CIRCLE, FILL, POINT_SEARCH, STOCHASTIC 
+	//};
+	//GrowthEnum m_growth = GrowthEnum::STOCHASTIC;
+	//static std::map<GrowthEnum, string> s_growth_enum_names;
 	
 	//std::queue<TriangleNode>
 	//std::priority_queue<TriangleNode, circular_buffer<TriangleNode, MAX_NUM_TRIANGLES>, TNodeLowSumPriority>
@@ -314,7 +316,7 @@ private:
 	int countMaxSum = 0;
 	int countCollision = 0;
 
-	bool verbose = true;
+	//bool verbose = true;
 
 	// GL data
 private:
@@ -356,8 +358,8 @@ private:
 	void step();
 
 	void renewAll(double fExtendLifespan);
-	void targetFind(growth_enum shape);
-	void targetFind(growth_enum shape, const Triplet<int> &target);
+	void targetFind(GrowthEnum shape);
+	void targetFind(GrowthEnum shape, const Triplet<int> &target);
 	void createRandomTarget();
 	bool processGrowthQueue(int count);
 	void resetGrowthQueue();

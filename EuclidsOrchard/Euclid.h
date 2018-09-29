@@ -19,6 +19,15 @@ using namespace std;
 //	Utils
 //
 
+template<class T>
+T dot(const vector<T> &a, const vector<T> &b)
+{
+	T sum = 0;
+	for(int i = 0; i < a.size(); ++i)
+		sum += (a[i] * b[i]);
+	return sum;
+}
+
 template<class C>
 int sign(C v) {
 	return (v < 0 ? -1 : (v ? 1 : 0));
@@ -169,6 +178,12 @@ public:
 	}
 
 	inline I sum() const { return x + y + z; }
+
+	vector<float> project() const
+	{
+		float sum = (float)this->sum();
+		return vector<float>({ (float)x / sum, (float)y / sum, (float)z / sum });
+	}
 
 	I lengthSq() const { return x*x + y*y + z*z; }
 
@@ -675,7 +690,13 @@ public:
 			// pt better be on the line XY
 			// figure out whether pt is more toward X or Y than ctr.
 			// (pt - ctr) dot (x - ctr)
-			int dotx = (pt - ctr).dot(m[0] - ctr);
+			auto p = pt.project();
+			auto c = ctr.project();
+			auto x = m[0].project();
+			vector<float> cp({ p[0] - c[0],p[1] - c[1],p[2] - c[2] });
+			vector<float> cx({ x[0] - c[0],x[1] - c[1],x[2] - c[2] });
+			float dotx = ::dot(cp, cx);
+			//int dotx = (c*pt - p*ctr).dot(c*m[0] - x*ctr)/(c*x*c*p);
 			if(dotx == 0)
 				return SEX00;
 			if(dotx > 0)
@@ -874,11 +895,14 @@ bool pointInCircle(const Triplet<I> &point, const Triplet<I> &ctr, float radius)
 }
 
 template<class F>
-inline F distsq3(const F *a, const F *b) {
+inline F distsq3(const F *a, const F *b) 
+{
 	F ab[3] = { b[0] - a[0], b[1] - a[1], b[2] - a[2] };
 	return sumsq3(ab);
 }
 
+//	returns true if any part of the line segment is inside a circle
+//	a, b, and ctr should be 3D points on the plane x+y+z=1
 template<class F>
 bool lineSegmentIntersectsCircle(const F *a, const F *b, const F *ctr, F radius) 
 {
@@ -913,6 +937,8 @@ bool lineSegmentIntersectsCircle(const F *a, const F *b, const F *ctr, F radius)
 	return (distsq3(c, ctr) <= rsq);
 }
 
+//	tests whether the line segment ab (projected onto x+y+z=1)
+//	intersects the circle
 template<class I>
 bool lineSegmentIntersectsCircle(const Triplet<I> &a, const Triplet<I> &b, const Triplet<I> &ctr, float radius) 
 {
@@ -936,13 +962,17 @@ bool lineSegmentIntersectsCircle(const Triplet<I> &a, const Triplet<I> &b, const
 }
 
 template<class I>
-bool triangleIntersectsCircle(const TripletTriangle<I> &tri, const Triplet<I> &ctr, float radius) {
+bool triangleIntersectsCircle(const TripletTriangle<I> &tri, const Triplet<I> &ctr, float radius) 
+{
 	// if any vertex is inside the circle
 	//if(    pointInCircle(tri[0], ctr, radius)
 	//	|| pointInCircle(tri[1], ctr, radius)
 	//	|| pointInCircle(tri[2], ctr, radius)) {
 	//	return true;
 	//}
+
+	if(tri.numColumns() < 3)
+		cout << "col: " << tri.numColumns() << endl;
 
 	// if circle's center is inside triangle, they intersect
 	if(tri.containsPoint(ctr)) {
@@ -980,6 +1010,31 @@ ostream& operator << (ostream &out, const TripletTriangle<I> &m) {
 
 
 //
+enum class GrowthEnum
+{
+	NONE = 0, TRIANGLE = 1, CIRCLE, FILL, POINT_SEARCH, STOCHASTIC
+};
+
+constexpr const char * GrowthEnumString(GrowthEnum e)
+{
+	switch(e)
+	{
+	case GrowthEnum::NONE:			return "NONE";
+	case GrowthEnum::TRIANGLE:		return "TRIANGLE";
+	case GrowthEnum::CIRCLE:		return "CIRCLE";
+	case GrowthEnum::FILL:			return "FILL";
+	case GrowthEnum::POINT_SEARCH: return "POINT_SEARCH";
+	case GrowthEnum::STOCHASTIC:	return "STOCHASTIC";
+	}
+};
+
+namespace std
+{
+	string to_string(GrowthEnum e)
+	{
+		return GrowthEnumString(e);
+	}
+}
 
 template<class I>
 class TripletSearch
@@ -987,11 +1042,15 @@ class TripletSearch
 public:
 	// search params
 	Triplet<I> m_target;
+	float m_targetRadius;
 	unsigned int m_maxDepth;
 	unsigned int m_maxHeight;
 	unsigned int m_maxNumEnumerationResults;
 	TripletTriangle<I> m_clip;
 	string m_operations;
+
+	GrowthEnum m_growth = GrowthEnum::STOCHASTIC;
+	//static std::map<GrowthEnum, string> s_growth_enum_names;
 
 	// search results
 	vector<string> m_paths;
@@ -1004,7 +1063,9 @@ public:
 	// enumeration results
 	map<Triplet<I>, string> m_enumeration;
 
-	TripletSearch() {
+	TripletSearch() 
+	{
+		m_targetRadius = 0;
 		m_maxDepth = 18;
 		m_maxHeight = 0x00010000;
 		m_maxNumEnumerationResults = 100000;
@@ -1013,7 +1074,8 @@ public:
 		m_bVerbose = true;
 	}
 
-	bool findAll(const Triplet<I> &target) {
+	bool findAll(const Triplet<I> &target)
+	{
 		m_target = target;
 		m_paths.clear();
 		m_bestPath.clear();
@@ -1031,12 +1093,15 @@ public:
 	}
 
 private:
-	bool findAllR(const TripletTriangle<I>& triangle, string path, unsigned int depth) {
+	bool findAllR(const TripletTriangle<I>& triangle, string path, unsigned int depth) 
+	{
 		Triplet<I> ctr = triangle.centroid();
 		assert(ctr.isCoprime());
-		if(ctr == m_target) {
+		if(ctr == m_target) 
+		{
 			path = path + "-ctr";
-			if(std::find(m_paths.begin(), m_paths.end(), path) == m_paths.end()) {
+			if(std::find(m_paths.begin(), m_paths.end(), path) == m_paths.end()) 
+			{
 				m_paths.push_back(path);
 				if(m_bVerbose) {
 					cout << "Found path: [" << path << "]\n";
@@ -1089,11 +1154,12 @@ public:
 
 		if(m_bVerbose) 
 		{
-			cout << "--- Sextant search for " << m_target << " Depth: " << m_maxDepth << " ---\n";
+			cout << "--- Sextant search [Growth:" << GrowthEnumString(m_growth)<<"] grow for " << m_target 
+				<< " Depth: " << m_maxDepth << " ---\n";
 		}
 
 		TripletTriangle<I> m;
-		bool found = searchR(m, "", 0);
+		bool found = (searchR(m, "", 0) > 0);
 
 		//cout << endl;
 		std::sort(m_paths.begin(), m_paths.end());
@@ -1122,22 +1188,31 @@ private:
 			return 0;
 		}
 
-		if(!triangle[0].precedes(m_target) &&
+		if( !triangle[0].precedes(m_target) &&
 			!triangle[1].precedes(m_target) &&
 			!triangle[2].precedes(m_target)) 
 		{
 			cerr << " ** wrong turn somewhere. no vertex precedes " << m_target << endl;
 			cerr << triangle;
-			return ERROR_INTERNAL;
+			return 0;
 		}
 
-		if(m_bVerbose) 
+		if(	   ctr.x > m_target.x
+			|| ctr.y > m_target.y
+			|| ctr.z > m_target.z)
 		{
-			cout << ".. Searching[" << depth << "].. " << path << "\n";
-			cout << triangle;
+			cerr << " ** missed the exit somewhere. ctr=" << ctr << " > target=" << m_target << endl;
+			cerr << triangle;
+			return 0;
 		}
 
-		bool found = false;		
+		//if(m_bVerbose)
+		//{
+		//	cout << ".. Searching[" << depth << "].. " << path << "\n";
+		//	cout << triangle;
+		//}
+
+		//bool found = false;		
 
 		/* // method 1		
 		// check vertices?
@@ -1155,15 +1230,27 @@ private:
 		//if(p02 == m_target) { found = true; m_paths.push_back(path + "-p02"); }
 */
 
+		SexClass sextant = triangle.getSextant(m_target);
+
+		if(m_bVerbose)
+		{
+			cout << "Sextant: " << sextant.asChar << endl;
+		}
+
 		// method 2
 		if(triangle.numColumns() == 1)
 		{
-			found=true;
-			m_paths.push_back(path+".");
-			return 1;
-		}
+			if(ctr == m_target)
+			{
+				//found = true;
+				m_paths.push_back(path + ".");
+				return 1;
+			}
 
-		SexClass sextant = triangle.getSextant(m_target);
+			cerr << " ** unknown error. single column miss" << endl;
+			cerr << triangle;
+			return 0;
+		}
 
 		int foundCount = 0;
 
@@ -1176,7 +1263,7 @@ private:
 		}//*/
 
 
-		if(!found)
+		//if(!found)
 		{
 			if(depth >= m_maxDepth) 
 			{
@@ -1195,10 +1282,6 @@ private:
 			TripletTriangle<I> mZ('Z', triangle); int inmZ = mZ.containsPoint(m_target);
 			int regionCount = inmx + inmy + inmz + inmX + inmY + inmZ;
 			*/
-
-			if(m_bVerbose) {
-				cout << "Sextant: " << sextant.asChar << endl;
-			}
 
 			/*
 			//	METHOD ONE
@@ -1248,9 +1331,21 @@ private:
 
 			if(sextant == SEX00)
 			{
-				found = true;
-				m_paths.push_back(path + "-ctr");
+				//found = true;
+				m_paths.push_back(path + ".");
 				return 1;
+			}
+			else if(triangle.numColumns() == 2)
+			{
+				// 1D binary search
+				if(sextant == SEXX0) 		// Left (toward X)
+					foundCount += searchR(triangle + 'a', path + "a", depth + 1);
+				else if(sextant == SEXY0)	// Right (toward Y)
+					foundCount += searchR(triangle + 'A', path + "A", depth + 1);
+				else
+				{
+					cerr << "!!??\n";
+				}
 			}
 			else if(sextant == SEXXN)
 				foundCount += searchR( triangle + 'x', path + 'x',		depth + 1);
@@ -1274,7 +1369,7 @@ private:
 				foundCount += searchR( triangle + '3' + 'a', path + "{ZX}a",	depth + 1);
 			else if(sextant == SEXZ0)	// on line between Z and ctr: merge XY->X, then toward Y
 				foundCount += searchR( triangle + '1' + 'A', path + "{XY}A",	depth + 1);
-			else if(sextant == SEXXY)	// on line between ctr and XY's midpoint: merge YZ->X, then toward X
+			else if(sextant == SEXXY)	// on line between ctr and XY's midpoint: merge XY->X, then toward X
 				foundCount += searchR( triangle + '1' + 'a', path + "{XY}a",	depth + 1);
 			else
 			{
@@ -1282,9 +1377,9 @@ private:
 			}
 		}
 
-		if(foundCount && m_bVerbose) {
-			cout << "** found in " << path << " **\n" << triangle;
-		}
+		//if(foundCount && m_bVerbose) {
+		//	cout << "** found in " << path << " **\n" << triangle;
+		//}
 
 		return foundCount;
 	}
@@ -1534,13 +1629,18 @@ private:
 		cout << "leftof(" << a << " , " << b << " , " << c << " ): " << signabc << endl;
 
 		TripletSearch<int> s;
-		s.m_bVerbose = false;
+		s.m_growth = GrowthEnum::POINT_SEARCH;
+		s.m_bVerbose = true;
 		TripletTriangle<I> t;
-		for(int i = 1; i <= 3; ++i) {
-			for(int j = 1; j <= 3; ++j) {
-				for(int k = 1; k <= 3; ++k) {
+		for(int i = 3; i <= 5; ++i) 
+		{
+			for(int j = 3; j <= i; ++j) 
+			{
+				for(int k = 1; k <= j; ++k) 
+				{
 					vec3 pt(i, j, k);
-					if(pt.isCoprime()) {
+					if(pt.isCoprime()) 
+					{
 						SexClass sex = t.getSextant(pt);
 						cout << pt << " Sex: " << sex.asChar;
 

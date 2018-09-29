@@ -268,9 +268,9 @@ void CSettingsDialog::initSettingsDialog(HWND hdlg, const EuclidDemoSettings& ss
 	SetScrollBarRange(hdlg, IDC_SPEED_SLIDER, m_settings.nSimulationSpeed, 1, 25, 1, 5);
 	SetDlgItemFormatText(hdlg, IDC_SPEED_STATIC, "Simulation Speed: %d", m_settings.nSimulationSpeed);
 	
-	SetScrollBarRange(hdlg, IDC_RANDOMPALETTE_SLIDER, (int)(100 * m_settings.m_fRandomPaletteProbability), 0, 100, 1, 10);
+	SetScrollBarRange(hdlg, IDC_RANDOMPALETTE_SLIDER, (int)(100 * m_settings.fRandomPaletteProbability), 0, 100, 1, 10);
 	SetDlgItemFormatText(hdlg, IDC_RANDOMPALETTE_STATIC, "Random palette frequency: %1.2f",
-		m_settings.m_fRandomPaletteProbability);
+		m_settings.fRandomPaletteProbability);
 
 	SetScrollBarRange(hdlg, IDC_RANDOMIZE_SLIDER, m_settings.nRandomizeTimer, 5, 600, 5, 5);
 	SetDlgItemFormatText(hdlg, IDC_RANDOMIZE_STATIC, "Randomize timer: %d s",
@@ -292,7 +292,7 @@ void CSettingsDialog::readDialogSettings()
 	
 	int variations = (IsDlgButtonChecked(hdlg, IDC_VARIATIONS) == BST_CHECKED);
 	m_settings.nRandomizeTimer = SendDlgItemMessage(hdlg, IDC_RANDOMIZE_SLIDER, TBM_GETPOS, 0, 0);
-	m_settings.m_fRandomPaletteProbability = 0.01f * SendDlgItemMessage(hdlg, IDC_RANDOMPALETTE_SLIDER, TBM_GETPOS, 0, 0);
+	m_settings.fRandomPaletteProbability = 0.01f * SendDlgItemMessage(hdlg, IDC_RANDOMPALETTE_SLIDER, TBM_GETPOS, 0, 0);
 	m_settings.multiScreenMode = (IsDlgButtonChecked(hdlg, IDC_MULTISCREEN_MODE) == BST_CHECKED);
 	m_settings.nCameraSpeed = SendDlgItemMessage(hdlg, IDC_CAMERASPEED_SLIDER, TBM_GETPOS, 0, 0);
 }
@@ -392,10 +392,10 @@ BOOL CSettingsDialog::handleMessage(HWND hdlg, UINT msg, WPARAM wpm, LPARAM lpm)
 			break;
 
 		case IDC_RANDOMPALETTE_SLIDER:
-			m_settings.m_fRandomPaletteProbability
+			m_settings.fRandomPaletteProbability
 				= 0.01f * SendDlgItemMessage(hdlg, IDC_RANDOMPALETTE_SLIDER, TBM_GETPOS, 0, 0);
 			SetDlgItemFormatText(hdlg, IDC_RANDOMPALETTE_STATIC, "Random palette frequency: %1.2f",
-				m_settings.m_fRandomPaletteProbability);
+				m_settings.fRandomPaletteProbability);
 			break;
 
 		case IDC_RANDOMIZE_SLIDER:
@@ -478,7 +478,7 @@ void readRegistry(EuclidDemoSettings &ssSettings)
 	if(result == ERROR_SUCCESS)
 		ssSettings.multiScreenMode = ival;
 
-	getRegistryFloat(hKey, "RandomPaletteFrequency", &ssSettings.m_fRandomPaletteProbability, 0.0f, 1.0f);
+	getRegistryFloat(hKey, "RandomPaletteFrequency", &ssSettings.fRandomPaletteProbability, 0.0f, 1.0f);
 
 	result = RegQueryValueEx(hKey, "FrameRateLimit", 0, &valtype, (LPBYTE)&val, &valsize);
 	if(result == ERROR_SUCCESS)
@@ -504,7 +504,7 @@ void writeRegistry(const EuclidDemoSettings& ssSettings)
 	RegSetValueEx(hKey, "CameraSpeed", 0, REG_DWORD, (CONST BYTE*)&ssSettings.nCameraSpeed, sizeof(ssSettings.nCameraSpeed));
 	RegSetValueEx(hKey, "MultiScreenMode", 0, REG_DWORD, (CONST BYTE*)&ssSettings.multiScreenMode, sizeof(ssSettings.multiScreenMode));
 
-	setRegistryFloat(hKey, "RandomPaletteFrequency", ssSettings.m_fRandomPaletteProbability);
+	setRegistryFloat(hKey, "RandomPaletteFrequency", ssSettings.fRandomPaletteProbability);
 
 	val = dFrameRateLimit;
 	RegSetValueEx(hKey, "FrameRateLimit", 0, REG_DWORD, (CONST BYTE*)&val, sizeof(val));

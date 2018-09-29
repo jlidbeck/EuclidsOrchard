@@ -54,16 +54,6 @@ EuclidDemo g_ss;
 stringstream str;
 static bool g_trace = false;
 
-std::map<EuclidDemo::growth_enum, string> EuclidDemo::s_growth_enum_names = 
-{
-	{ growth_enum::NONE, "NONE" },
-	{ growth_enum::TRIANGLE, "TRIANGLE" },
-	{ growth_enum::CIRCLE, "CIRCLE" },
-	{ growth_enum::FILL, "FILL" },
-	{ growth_enum::POINT_SEARCH, "POINT_SEARCH" },
-	{ growth_enum::STOCHASTIC, "STOCHASTIC" }
-};
-
 EuclidDemo::EuclidDemo() 
 {
 	m_settings.randomize();
@@ -85,13 +75,13 @@ void EuclidDemo::draw()
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
 	gluPerspective(
-		m_settings.m_fFOV,
+		m_settings.fFOV,
 		m_fAspectRatio,
 		0.1, // near clipping plane
 		10000.0);	// far clipping plane
 	//glOrtho(windowRect.left, windowRect.right, windowRect.bottom, windowRect.top, -20.0, 20.0);
 
-	switch(m_settings.m_nCameraMode) 
+	switch(m_settings.nCameraMode) 
 	{
 		case CameraMode::CENTER:
 		default:	// look at center
@@ -104,7 +94,7 @@ void EuclidDemo::draw()
 		case CameraMode::TARGET:		// look at target
 			gluLookAt(
 				0, 0, 0,
-				m_targetCenter.x, m_targetCenter.y, m_targetCenter.z,
+				m_search.m_target.x, m_search.m_target.y, m_search.m_target.z,
 				0, 1, 0);
 			break;
 
@@ -117,7 +107,7 @@ void EuclidDemo::draw()
 				0.5f + jitter*(sin(speed *6)),
 				0.5f + jitter*(cos(speed *4)));
 
-			m_targetCenter.set(
+			m_search.m_target.set(
 				(int)(0.5f + 1000 * vLook[0]),
 				(int)(0.5f + 1000 * vLook[1]),
 				(int)(0.5f + 1000 * vLook[2]));
@@ -125,7 +115,7 @@ void EuclidDemo::draw()
 			s.m_bVerbose = false;
 			s.m_maxDepth = 50;
 			s.m_maxHeight = 2000;
-			s.search(m_targetCenter);
+			s.search(m_search.m_target);
 			addTrianglePath(s.m_paths.size() > 0 ? s.m_paths[0] : s.m_bestPath);
 
 			gluLookAt(
@@ -230,7 +220,7 @@ void EuclidDemo::drawViewport(float x0, float y0, float x1, float y1)
 		drawTriangles();
 
 	// draw triangles
-	if(m_settings.m_bFillTriangles || m_settings.m_nDrawEdges) 
+	if(m_settings.bFillTriangles || m_settings.nDrawEdges) 
 	{
 		glDepthMask(false);	// don't modify depth buffer
 		//glDepthFunc(GL_GREATER);
@@ -243,14 +233,15 @@ void EuclidDemo::drawViewport(float x0, float y0, float x1, float y1)
 		glEnableClientState(GL_VERTEX_ARRAY);
 		glEnableClientState(GL_COLOR_ARRAY);
 
-		if(m_settings.m_bFillTriangles) {
+		if(m_settings.bFillTriangles) {
 			glDrawArrays(GL_TRIANGLES, 0, m_vTriangleVertices.size());
 		}
 
-		if(m_settings.m_nDrawEdges) {
+		if(m_settings.nDrawEdges) 
+		{
 			glLineWidth(2.0f);
 			glDisableClientState(GL_COLOR_ARRAY);
-			switch(m_settings.m_nDrawEdges) {
+			switch(m_settings.nDrawEdges) {
 				case 1:
 					glColor4f(0, 0, 0, 1);
 					break;
@@ -270,7 +261,8 @@ void EuclidDemo::drawViewport(float x0, float y0, float x1, float y1)
 		//glDrawArrays(GL_LINES, 0, m_allTriangles.size() * 3);
 	}
 	
-	if(m_settings.m_nDrawBranches) {
+	if(m_settings.nDrawBranches)
+	{
 		glDepthMask(false);
 		glDisable(GL_DEPTH_TEST);
 
@@ -279,12 +271,12 @@ void EuclidDemo::drawViewport(float x0, float y0, float x1, float y1)
 		}
 	}
 
-	if(m_settings.m_nDrawVertices) {
+	if(m_settings.nDrawVertices) {
 		drawVertices();
 	}
 
 	// draw find target
-	if(m_settings.m_bDrawTarget)
+	if(m_settings.bDrawTarget)
 	{
 		glDepthMask(false);
 		glDisable(GL_DEPTH_TEST);
@@ -305,31 +297,31 @@ void EuclidDemo::drawViewport(float x0, float y0, float x1, float y1)
 		glColor4fv(rgba);
 		glLineWidth(3.0f);
 
-		switch(m_targetShape) 
+		switch(m_search.m_growth) 
 		{
-			case growth_enum::CIRCLE:
+			case GrowthEnum::CIRCLE:
 			default:
 			{
 				// draw circular target
 				glPushMatrix();
-					float sum = m_targetCenter.sum();
-					glTranslatef(m_targetCenter.x / sum, m_targetCenter.y / sum, m_targetCenter.z / sum);
-					glScalef(m_targetRadius, m_targetRadius, m_targetRadius);
+					float sum = m_search.m_target.sum();
+					glTranslatef(m_search.m_target.x / sum, m_search.m_target.y / sum, m_search.m_target.z / sum);
+					glScalef(m_search.m_targetRadius, m_search.m_targetRadius, m_search.m_targetRadius);
 					glCallList(LIST_TARGET);
 				glPopMatrix();
 			}
 			break;
 
-			case growth_enum::TRIANGLE:
-			case growth_enum::POINT_SEARCH:
+			case GrowthEnum::TRIANGLE:
+			case GrowthEnum::POINT_SEARCH:
 			{
 				// draw triangular target
 				glBegin(GL_LINE_LOOP);
 				//glBegin(GL_TRIANGLES);
-					glVertex3i(m_targetTriangle[0].x, m_targetTriangle[0].y, m_targetTriangle[0].z);
-					glVertex3i(m_targetTriangle[1].x, m_targetTriangle[1].y, m_targetTriangle[1].z);
-					glVertex3i(m_targetTriangle[2].x, m_targetTriangle[2].y, m_targetTriangle[2].z);
-					//glVertex3i(m_targetTriangle[0].x, m_targetTriangle[0].y, m_targetTriangle[0].z);
+					glVertex3i(m_search.m_clip[0].x, m_search.m_clip[0].y, m_search.m_clip[0].z);
+					glVertex3i(m_search.m_clip[1].x, m_search.m_clip[1].y, m_search.m_clip[1].z);
+					glVertex3i(m_search.m_clip[2].x, m_search.m_clip[2].y, m_search.m_clip[2].z);
+					//glVertex3i(m_search.m_clip[0].x, m_search.m_clip[0].y, m_search.m_clip[0].z);
 				glEnd();
 			}
 			break;
@@ -358,7 +350,7 @@ void EuclidDemo::drawViewport(float x0, float y0, float x1, float y1)
 		}
 	}
 
-	if(m_settings.m_bDrawStats)
+	if(m_settings.bDrawStats)
 	{
 		// FPS
 		++m_nFrameCount;
@@ -392,7 +384,10 @@ void EuclidDemo::drawViewport(float x0, float y0, float x1, float y1)
 
 		char buf[80], buf2[80];
 		sprintf_s(buf2, "%.2lf fps", m_fps);
-		sprintf_s(buf, "%s %s %u : %u", s_growth_enum_names[m_targetShape].c_str(), m_ops, m_growQueue.size(), m_allTriangles.size());
+		sprintf_s(buf, "%s %s %u : %u", 
+			GrowthEnumString(m_search.m_growth), 
+			m_search.m_operations.c_str(), 
+			m_growQueue.size(), m_allTriangles.size());
 		vector<string> asz = { buf2, buf };
 		m_text.draw(asz);
 
@@ -434,11 +429,11 @@ void EuclidDemo::resetGrowthQueue()
 }
 
 //	search for a specific target
-void EuclidDemo::targetFind(growth_enum shape, const Triplet<int> &target)
+void EuclidDemo::targetFind(GrowthEnum shape, const Triplet<int> &target)
 {
-	m_targetShape = shape;
-	m_targetCenter = target;
-	m_targetRadius = 0.1f;
+	m_search.m_growth = shape;
+	m_search.m_target = target;
+	m_search.m_targetRadius = 0.1f;
 
 	resetGrowthQueue();
 }
@@ -446,14 +441,15 @@ void EuclidDemo::targetFind(growth_enum shape, const Triplet<int> &target)
 //
 //	search for a random target
 //
-void EuclidDemo::targetFind(growth_enum shape)
+void EuclidDemo::targetFind(GrowthEnum shape)
 {
-	m_targetShape = shape;
+	m_search.m_growth = shape;
 
 	createRandomTarget();
 	resetGrowthQueue();
 
-	cout << "FIND: " << m_targetCenter << " " << s_growth_enum_names[m_targetShape] << " radius: " << m_targetRadius << endl;
+	cout << "FIND: " << m_search.m_target << " " << GrowthEnumString(m_search.m_growth) 
+		 << " radius: " << m_search.m_targetRadius << " ops: " << m_search.m_operations << endl;
 
 	//TRACE("**Find: Added %d triangles. Collisions: %d Max depth: %d Max sum: %d\n", 
 	//	m_allTriangles.size()-countBefore, countCollision, countMaxDepth, countMaxSum);
@@ -471,22 +467,23 @@ void EuclidDemo::createRandomTarget()
 		Triplet<int> pt0(v[0] + size, v[1], v[2]);
 		Triplet<int> pt1(v[0], v[1] + size, v[2]);
 		Triplet<int> pt2(v[0], v[1], v[2] + size);
-		m_targetTriangle.set(pt0, pt1, pt2);
-		ASSERT(m_targetTriangle.isTriangle());
-	} while(!masterTriangle.containsTriangle(m_targetTriangle));
+		m_search.m_clip.set(pt0, pt1, pt2);
+		ASSERT(m_search.m_clip.isTriangle());
+	} while(!masterTriangle.containsTriangle(m_search.m_clip));
 
-	m_targetCenter = m_targetTriangle.centroid();
-	m_targetRadius = 0;
+	m_search.m_target = m_search.m_clip.centroid();
+	m_search.m_targetRadius = 0;
 
-	switch(m_targetShape) {
-	case growth_enum::CIRCLE:
-		m_targetRadius = 0.1f;
+	switch(m_search.m_growth) 
+	{
+	case GrowthEnum::CIRCLE:
+		m_search.m_targetRadius = 0.1f;
 		break;
 
-	case growth_enum::STOCHASTIC:
-	case growth_enum::FILL:
-		m_targetCenter.set(1, 1, 1);
-		m_targetRadius = 0.3f;
+	case GrowthEnum::STOCHASTIC:
+	case GrowthEnum::FILL:
+		m_search.m_target.set(1, 1, 1);
+		m_search.m_targetRadius = 0.3f;
 		break;
 	}
 
@@ -496,7 +493,7 @@ void EuclidDemo::step()
 {
 	double t = m_timer.t();
 
-	if(m_settings.m_nCameraMode == CameraMode::DRIFT) 
+	if(m_settings.nCameraMode == CameraMode::DRIFT) 
 	{
 	}
 
@@ -533,7 +530,7 @@ void EuclidDemo::step()
 	}
 
 	// perform growth
-	if(m_targetShape != growth_enum::NONE) 
+	if(m_search.m_growth != GrowthEnum::NONE) 
 	{
 		processGrowthQueue(100);
 	}
@@ -575,34 +572,34 @@ bool EuclidDemo::processGrowthQueue(int count)
 
 		// select set of operations from settings--these will be modified/randomized by the growth algorithm
 		char ops[40];
-		strcpy_s(ops, m_ops);
+		strcpy_s(ops, m_search.m_operations.c_str());
 
 		bool bGenerateChildren = false;
 
-		switch(m_targetShape) 
+		switch(m_search.m_growth) 
 		{
-			case growth_enum::FILL:
+			case GrowthEnum::FILL:
 				bGenerateChildren = true;
 				break;
 
-			case growth_enum::CIRCLE:		// circle clip
-				bGenerateChildren = ::triangleIntersectsCircle(tnode.tri, m_targetCenter, m_targetRadius);
+			case GrowthEnum::CIRCLE:		// circle clip
+				bGenerateChildren = ::triangleIntersectsCircle(tnode.tri, m_search.m_target, m_search.m_targetRadius);
 				break;
 
-			case growth_enum::TRIANGLE:	// triangular clip
-				bGenerateChildren = ::trianglesIntersect(tnode.tri, m_targetTriangle);
+			case GrowthEnum::TRIANGLE:	// triangular clip
+				bGenerateChildren = ::trianglesIntersect(tnode.tri, m_search.m_clip);
 				break;
 
-			case growth_enum::POINT_SEARCH:	// point search
-				//bIntersection = tnode.tri.containsPoint(m_targetCenter);
+			case GrowthEnum::POINT_SEARCH:	// point search
+				//bIntersection = tnode.tri.containsPoint(m_search.m_target);
 				// all 3 points in?
 				bGenerateChildren =
-					   tnode.tri.containsPoint(m_targetTriangle[0])
-					&& tnode.tri.containsPoint(m_targetTriangle[1])
-					&& tnode.tri.containsPoint(m_targetTriangle[2]);
+					   tnode.tri.containsPoint(m_search.m_clip[0])
+					&& tnode.tri.containsPoint(m_search.m_clip[1])
+					&& tnode.tri.containsPoint(m_search.m_clip[2]);
 				break;
 
-			case growth_enum::STOCHASTIC:
+			case GrowthEnum::STOCHASTIC:
 			{
 				if(age > TRI_TIME_REPRODUCE) 
 				{
@@ -630,7 +627,7 @@ bool EuclidDemo::processGrowthQueue(int count)
 			}
 			break;
 
-		}	// switch(m_targetShape)
+		}	// switch(m_search.m_growth)
 
 		if(!bGenerateChildren) 
 		{
@@ -745,7 +742,7 @@ void EuclidDemo::drawTriangles()
 		auto ctr = tri.centroid();
 
 		// compute triangle fill color
-		//if(m_settings.m_bFillTriangles) 
+		//if(m_settings.bFillTriangles) 
 		{
 			// flash white (high lum, low sat)
 			float sat =
@@ -780,7 +777,7 @@ void EuclidDemo::drawTriangles()
 			//	COLORREFtoRGB(c, rgba1.v);
 			//}
 			//mix3(rgba1.v, rgba2.v, 0.5f, rgba.v);
-			rgbFace[3] = rgba1[3] = rgba2[3] =rgba[3]= m_settings.m_alpha * alpha;
+			rgbFace[3] = rgba1[3] = rgba2[3] =rgba[3]= m_settings.fAlpha * alpha;
 			//glColor4fv(rgba);
 			//glBegin(GL_TRIANGLES);
 			mix3(WHITE.v, tnode.m_rgba.v, sat, rgbFace.v);
@@ -830,7 +827,7 @@ void EuclidDemo::drawTriangles()
 	}
 
 	//// draw lines
-	//switch(m_settings.m_nDrawEdges) {
+	//switch(m_settings.nDrawEdges) {
 	//case 0:
 	//	return;
 
@@ -856,7 +853,7 @@ void EuclidDemo::drawVertices()
 {
 	//double t = m_timer.t();
 	// vertex size
-	float s = m_settings.m_fVertexSize;
+	float s = m_settings.fVertexSize;
 
 	//glDepthMask(true);	// write to depth buffer
 	glDisable(GL_DEPTH_TEST);
@@ -912,19 +909,19 @@ void EuclidDemo::drawVertices()
 			//glTranslatef(s*a.x, s*a.y, s*a.z);
 			//float s = 0.3f * sqrt(1.5f*a.sum());
 
-			switch(m_settings.m_nDrawVertices) {
+			switch(m_settings.nDrawVertices) {
 				case 1:
 					// scaling by perspective only
 					break;
 
 				case 2:
 					// size boost for distant points
-					s = m_settings.m_fVertexSize * 0.1f * logf(sqrt(distsq) + 1.0f);
+					s = m_settings.fVertexSize * 0.1f * logf(sqrt(distsq) + 1.0f);
 					break;
 
 				case 3:
 					// stronger size boost for distant points
-					s = m_settings.m_fVertexSize * 0.05f * sqrt(sqrt(distsq));
+					s = m_settings.fVertexSize * 0.05f * sqrt(sqrt(distsq));
 					break;
 			}
 
@@ -999,7 +996,8 @@ void EuclidDemo::initSaver(HWND hwnd)
 	float b[3] = { 1,10,0 };
 	float ctr[3] = { 0,0,0 };
 	float radius = 10;
-	for(float i = -5; i <= 3; ++i) {
+	for(float i = -5; i <= 3; ++i) 
+	{
 		a[0] = i;
 		b[0] = i + 2;
 		bool q = lineSegmentIntersectsCircle(a, b, ctr, radius);
@@ -1134,22 +1132,22 @@ LONG EuclidDemo::handleKeyDown(
 
 	case '0':
 	case VK_NUMPAD0:
-		m_settings.m_nDrawVertices = (m_settings.m_nDrawVertices + 1) % 4;
+		m_settings.nDrawVertices = (m_settings.nDrawVertices + 1) % 4;
 		return 0;
 
 	case '1':
 	case VK_NUMPAD1:
-		m_settings.m_nDrawEdges = (m_settings.m_nDrawEdges + 1) % 3;
+		m_settings.nDrawEdges = (m_settings.nDrawEdges + 1) % 3;
 		return 0;
 
 	case '2':
 	case VK_NUMPAD2:
-		m_settings.m_bFillTriangles = !m_settings.m_bFillTriangles;
+		m_settings.bFillTriangles = !m_settings.bFillTriangles;
 		return 0;
 
 	case '3':
 	case VK_NUMPAD3:
-		m_settings.m_nDrawBranches = (m_settings.m_nDrawBranches + 1) % 2;
+		m_settings.nDrawBranches = (m_settings.nDrawBranches + 1) % 2;
 		return 0;
 
 	case '4':
@@ -1166,20 +1164,20 @@ LONG EuclidDemo::handleKeyDown(
 
 	case '9':
 	case VK_NUMPAD9:
-		m_settings.m_bDrawTarget = m_settings.m_bDrawStats = !m_settings.m_bDrawTarget;
+		m_settings.bDrawTarget = m_settings.bDrawStats = !m_settings.bDrawTarget;
 		return 0;
 
 	case VK_OEM_MINUS:	// '-': zoom out
-		m_settings.m_fFOV = min(180.0, m_settings.m_fFOV + repeatCount);
+		m_settings.fFOV = min(180.0, m_settings.fFOV + repeatCount);
 		return 0;
 
 	case VK_OEM_PLUS:	// '+': zoom in
-		m_settings.m_fFOV = max(1.0, m_settings.m_fFOV - repeatCount);
+		m_settings.fFOV = max(1.0, m_settings.fFOV - repeatCount);
 		return 0;
 
 	case VK_DELETE: 
 		m_allTriangles.clear();
-		m_targetShape = growth_enum::NONE;
+		m_search.m_growth = GrowthEnum::NONE;
 
 	case VK_HOME: {
 		resetGrowthQueue();
@@ -1193,7 +1191,7 @@ LONG EuclidDemo::handleKeyDown(
 		return 0;
 
 	case 'C':
-		m_settings.m_nCameraMode = (CameraMode)((m_settings.m_nCameraMode + 1) % 4);
+		m_settings.nCameraMode = (CameraMode)((m_settings.nCameraMode + 1) % 4);
 		return 0;
 
 	case 'P':
@@ -1201,24 +1199,24 @@ LONG EuclidDemo::handleKeyDown(
 		return 0;
 
 	case 'X':
-		targetFind(growth_enum::FILL);
+		targetFind(GrowthEnum::FILL);
 		return 0;
 
 	case 'F':
 		if(::GetKeyState(VK_SHIFT)) {
-			targetFind(growth_enum::CIRCLE);
+			targetFind(GrowthEnum::CIRCLE);
 		}
 		else {
-			targetFind(growth_enum::TRIANGLE);
+			targetFind(GrowthEnum::TRIANGLE);
 		}
 		return 0;
 
 	case 'G':
-		targetFind(growth_enum::STOCHASTIC);
+		targetFind(GrowthEnum::STOCHASTIC);
 		return 0;
 
 	case 'H':
-		targetFind(growth_enum::POINT_SEARCH);
+		targetFind(GrowthEnum::POINT_SEARCH);
 		return 0;
 
 	case 'N':
@@ -1240,11 +1238,11 @@ LONG EuclidDemo::handleKeyDown(
 		return 0;
 
 	case VK_OEM_4:  //  '[': decrease vertex size
-		m_settings.m_fVertexSize *= 0.9f;
+		m_settings.fVertexSize *= 0.9f;
 		return 0;
 		
 	case VK_OEM_6:  //  ']': increase vertex size
-		m_settings.m_fVertexSize *= 1.1f;
+		m_settings.fVertexSize *= 1.1f;
 		return 0;
 		
 	case VK_OEM_PERIOD:
@@ -1359,7 +1357,7 @@ bool EuclidDemo::addTrianglePath(string path)
 bool EuclidDemo::executeUserOp(string sz)
 {
 	// stop all auto growth
-	m_targetShape = growth_enum::NONE;
+	m_search.m_growth = GrowthEnum::NONE;
 	m_settings.m_alive = false;
 
 	// if clear, set user node to basis triangle
@@ -1457,7 +1455,7 @@ bool EuclidDemo::executeUserCommand(string sz)
 			}
 			else if(sz == "fill")
 			{
-				this->targetFind(growth_enum::FILL);
+				this->targetFind(GrowthEnum::FILL);
 			}
 			else if(asz[0] == "pal")
 			{
@@ -1476,19 +1474,19 @@ bool EuclidDemo::executeUserCommand(string sz)
 			// multi-word command
 			if(asz[0] == "op")
 			{
-				strncpy_s(m_ops, asz[1].c_str(), sizeof(m_ops));
+				m_search.m_operations = asz[1];
 			}
 			else if(asz[0] == "verbose")
 			{
-				verbose = !verbose;
-				cout << "verbose: " << verbose << endl;
+				m_search.m_bVerbose = !m_search.m_bVerbose;
+				cout << "verbose: " << m_search.m_bVerbose << endl;
 			}
 			else if(asz[0] == "find")
 			{
 				stringstream str(asz[1]);
 				Triplet<int> target;
 				str >> target;
-				targetFind(growth_enum::CIRCLE, target);
+				targetFind(GrowthEnum::CIRCLE, target);
 			}
 			else if(asz[0] == "best")
 			{
@@ -1499,7 +1497,8 @@ bool EuclidDemo::executeUserCommand(string sz)
 					str1 >> a;
 					cout << "BEST: " << a << endl;
 					TripletSearch<int> s;
-					s.m_bVerbose = this->verbose;
+					s.m_operations = m_search.m_operations;
+					s.m_bVerbose = m_search.m_bVerbose;
 					s.m_maxDepth = 100;
 					s.m_maxHeight = 5000;
 					s.search(a);
@@ -1515,11 +1514,11 @@ bool EuclidDemo::executeUserCommand(string sz)
 				Triplet<int> x;
 				stringstream str(asz[1]);
 				str >> x;
-				m_targetCenter = x;
+				m_search.m_target = x;
 			}
 			else if(asz[0] == "alpha")
 			{
-				sscanf_s(asz[1].c_str(), "%f", &m_settings.m_alpha);
+				sscanf_s(asz[1].c_str(), "%f", &m_settings.fAlpha);
 			}
 			else
 			{
