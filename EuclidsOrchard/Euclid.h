@@ -8,12 +8,36 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <numeric>
+
 
 #ifndef TRACE
 #define TRACE(x) ((void)0)
 #endif
 
+using std::string;
+using std::exception;
+using std::vector;
+using std::istream;
+using std::ostream;
+using std::cerr;
+using std::endl;
+using std::cout;
 using namespace std;
+
+
+#ifndef NDEBUG
+#   define ASSERT(condition, message) \
+    do { \
+        if (! (condition)) { \
+            std::cerr << "Assertion `" #condition "` failed in " << __FILE__ \
+                      << " line " << __LINE__ << ": " << message << std::endl; \
+            __debugbreak(); \
+        } \
+    } while (false)
+#else
+#   define ASSERT(condition, message) do { } while (false)
+#endif
 
 //
 //	Utils
@@ -22,10 +46,7 @@ using namespace std;
 template<class T>
 T dot(const vector<T> &a, const vector<T> &b)
 {
-	T sum = 0;
-	for(int i = 0; i < a.size(); ++i)
-		sum += (a[i] * b[i]);
-	return sum;
+    return std::inner_product(a.begin(), a.end(), b.begin(), 0);
 }
 
 template<class C>
@@ -60,7 +81,8 @@ I gcd(I m, I n) {
 
 // modified euclid..
 // gcd(x,y,0) == gcd(x,y)
-inline int gcd2(const int *pValues, int numValues) {
+inline int gcd2(const int *pValues, int numValues) 
+{
 	vector<int> p(pValues, pValues + numValues);
 	int i1, v1, v2;
 
@@ -203,7 +225,7 @@ public:
 	// returns true if this a coprime triplet, that is, GCD(x,y,z) == 1
 	int isCoprime() const 
 	{
-		assert(::gcd(x, ::gcd(y, z)) == ::gcd(&x, 3));
+		ASSERT(::gcd(x, ::gcd(y, z)) == ::gcd(&x, 3), string("non-transitive gcd")+std::to_string(*this));
 		return (::gcd(x, ::gcd(y, z)) == 1);
 	}
 
@@ -317,6 +339,23 @@ istream& operator >> (istream &in, Triplet<I> &p)
 	return in;
 }
 
+namespace std
+{
+    std::string to_string(const Triplet<int> &tri)
+    {
+        std::ostringstream strstr;
+        strstr << tri;
+        return strstr.str();
+    }
+
+    void from_string(std::string const & str, Triplet<int>& _Value) noexcept
+    {
+        stringstream sstr(str);
+        sstr >> _Value;
+    }
+}
+
+
 union SexClass
 {
 	char asChar[4];
@@ -360,6 +399,7 @@ class TripletTriangle
 public:
 	Triplet<I> m[3] = { { 1,0,0 },{ 0,1,0 },{ 0,0,1 } };
 public:
+	string path = "";
 	unsigned int depth = 0;
 
 	TripletTriangle() {}
@@ -436,7 +476,7 @@ public:
 			+ m[0].z * (m[1].x * m[2].y - m[1].y * m[2].x);
 	}
 
-	Triplet<I>& centroid() const 
+	Triplet<I> centroid() const 
 	{
 		return m[0] + m[1] + m[2];
 	}
@@ -508,6 +548,7 @@ public:
 	//
 	//	AKA pointInTriangle
 	//	returns true if the point is inside this triangle or on an edge or vertex
+    //  correct even if dimensions have been collapsed
 	//
 	bool containsPoint(const Triplet<I> &pt) const
 	{
@@ -536,6 +577,8 @@ public:
 	//	- columns form left-winding triangle
 	//
 
+    //  if src and dest cols are nonzero,
+    //  toCol += fromCol
 	inline bool merge(int fromCol, int toCol) 
 	{
 		assert(fromCol != toCol);
@@ -575,10 +618,10 @@ public:
 		m[2] = { 0,0,0 };
 
 		Triplet<I> ctr = this->centroid();
-		assert(ctr.isCoprime());
+        assert(ctr == before);
 
-		//depth += 1;
-		return true;
+        ++depth;
+        return true;
 	}
 
 	inline void mergeAll()
@@ -587,18 +630,23 @@ public:
 		m[0] = centroid();
 	}
 
+    // 3-dimensional cascade merge
 	// replaces this triangle with one of its sextants.
 	// - vertex[primary] is preserved; 
 	// - vertex[secondary] moves to primary+secondary midpoint;
 	// - remaining vertex moves to centroid.
 	//
 	// same as merge(p, s); merge(s, t);
-	inline void merge3(int primary, int secondary) 
+	inline bool merge3(int primary, int secondary) 
 	{
 		// before: x, y, z
 		// after: x, x+y, x+y+z
-		merge(primary, secondary);
-		merge(secondary, 3 - primary - secondary);
+        if (!merge(primary, secondary))
+            return false;   // temporary logic here: consider it legal (return true) as long as the first of the merges is complete.. 
+        // this allows more lax code once dimensions have collapsed
+
+        merge(secondary, 3 - primary - secondary);
+        return true;
 	}
 
 	// creates triangle from midpoints--central quadrant
@@ -616,12 +664,13 @@ public:
 	}
 
 	// rotate columns one to the right. preserves triangle invariants.
-	void rotate() 
+	bool rotate() 
 	{
 		auto temp = m[2];
 		m[2] = m[1];
 		m[1] = m[0];
 		m[0] = temp;
+        return true;
 	}
 
 	inline bool operate(char op, const TripletTriangle<I> &src) 
@@ -632,31 +681,43 @@ public:
 
 	bool operate(char op) 
 	{
-		switch(op) 
+		// append to path string
+		switch(op)
+		{
+			case '1': this->path += "{XY}"; break;
+			case '2': this->path += "{YZ}"; break;
+			case '3': this->path += "{ZX}"; break;
+
+			default:
+				this->path += op;
+		}
+
+		// apply operations
+		switch(op)
 		{
 			// the 6 basic transforms: each divides the parent triangle in half
-			case 'a': return this->merge(0, 1); break;
-			case 'b': return this->merge(1, 2); break;
-			case 'c': return this->merge(2, 0); break;
-			case 'A': return this->merge(1, 0); break;
-			case 'B': return this->merge(2, 1); break;
-			case 'C': return this->merge(0, 2); break;
+			case 'a': return this->merge(0, 1);
+			case 'b': return this->merge(1, 2);
+			case 'c': return this->merge(2, 0);
+			case 'A': return this->merge(1, 0);
+			case 'B': return this->merge(2, 1);
+			case 'C': return this->merge(0, 2);
 			// cascade merges
 			// transforms triangle to one of its parent's sextants
 			// the 6 aggregate transforms: each defines one sixth of the parent triangle
-			case 'x': this->merge3(0, 1); break;
-			case 'y': this->merge3(1, 2); break;
-			case 'z': this->merge3(2, 0); break;
-			case 'X': this->merge3(0, 2); break;
-			case 'Y': this->merge3(1, 0); break;
-			case 'Z': this->merge3(2, 1); break;
+			case 'x': return this->merge3(0, 1);
+			case 'y': return this->merge3(1, 2);
+			case 'z': return this->merge3(2, 0);
+			case 'X': return this->merge3(0, 2);
+			case 'Y': return this->merge3(1, 0);
+			case 'Z': return this->merge3(2, 1);
 			// alternate sixth division: 3 corner quadrants (like a Sierpinski triangle), 3 inner triangle thirds
-			case 'j': this->merge(0, 1); this->merge(0, 2); break;	// X corner quadrant
-			case 'k': this->merge(1, 0); this->merge(1, 2); break;	// Y corner quadrant
-			case 'l': this->merge(2, 1); this->merge(2, 0); break;	// Z corner quadrant
-			case 'm': this->merge(0, 1); this->merge(2, 0); this->merge(1, 2); rotate(); break;	// X-ward inner 12th, rotated for aesthetics
-			case 'n': this->merge(1, 2); this->merge(0, 1); this->merge(2, 0); rotate(); break;	// Y-ward inner 12th
-			case 'o': this->merge(2, 0); this->merge(1, 2); this->merge(0, 1); rotate(); break;	// Z-ward inner 12th
+			case 'j': this->merge(0, 1); this->merge(0, 2); break; // X corner quadrant
+			case 'k': this->merge(1, 0); this->merge(1, 2); break; // Y corner quadrant
+			case 'l': this->merge(2, 1); this->merge(2, 0); break; // Z corner quadrant
+			case 'm': this->merge(0, 1); this->merge(2, 0); this->merge(1, 2) && rotate(); break; // X-ward inner 12th, rotated for aesthetics
+			case 'n': this->merge(1, 2); this->merge(0, 1); this->merge(2, 0) && rotate(); break; // Y-ward inner 12th
+			case 'o': this->merge(2, 0); this->merge(1, 2); this->merge(0, 1) && rotate(); break; // Z-ward inner 12th
 			// thirds
 			//case 'u': this->mergeAll(0); break;
 			//case 'v': this->mergeAll(1); break;
@@ -818,6 +879,10 @@ public:
 		// they are equal
 		return 0;
 	}
+
+	//friend ostream& operator << (ostream &out, const TripletTriangle<I> &m);
+	//friend std::string to_string(const TripletTriangle<int> &tri);
+
 };		// class TripletTriangle
 
 // returns true if the two segments intersect, including endpoint intersections
@@ -990,7 +1055,8 @@ bool triangleIntersectsCircle(const TripletTriangle<I> &tri, const Triplet<I> &c
 }
 
 template<class I>
-ostream& operator << (ostream &out, const TripletTriangle<I> &m) {
+ostream& operator << (ostream &out, const TripletTriangle<I> &m) 
+{
 	Triplet<I> merge = m.centroid();
 
 	bool good = m.isCoprime();
@@ -1005,6 +1071,16 @@ ostream& operator << (ostream &out, const TripletTriangle<I> &m) {
 
 	//printf("  %s\n", good ? "ok" : "---- BAD!! ----");
 	return out;
+}
+
+namespace std
+{
+	std::string to_string(const TripletTriangle<int> &tri)
+	{
+		std::ostringstream strstr;
+		strstr << tri;
+		return strstr.str();
+	}
 }
 
 
@@ -1043,8 +1119,9 @@ public:
 	// search params
 	Triplet<I> m_target;
 	float m_targetRadius;
-	unsigned int m_maxDepth;
+    unsigned int m_maxDepth = 10;
 	unsigned int m_maxHeight;
+	unsigned int m_nMaxTriangleSum = 1000;
 	unsigned int m_maxNumEnumerationResults;
 	TripletTriangle<I> m_clip;
 	string m_operations;
@@ -1057,11 +1134,13 @@ public:
 	string m_bestPath;
 	int m_countMaxDepth;
 	int m_countMaxHeight;
+	int m_countMaxSum = 0;
+	int m_countCollision = 0;
 	int m_countDeadEnds;
 	bool m_bVerbose;
 
 	// enumeration results
-	map<Triplet<I>, string> m_enumeration;
+	std::map<Triplet<I>, string> m_enumeration;
 
 	TripletSearch() 
 	{
@@ -1069,8 +1148,7 @@ public:
 		m_maxDepth = 18;
 		m_maxHeight = 0x00010000;
 		m_maxNumEnumerationResults = 100000;
-		m_operations = "xyzXYZ";// "468";// "456789";// "xyzXYZ";
-								//m_operations = operations;
+		m_operations = "xyzXYZ123";// "468";// "456789";// "xyzXYZ";
 		m_bVerbose = true;
 	}
 
@@ -1086,20 +1164,20 @@ public:
 		//cout << "--- Searching for " << m_target << " Ops: " << m_operations << " Depth: " << m_maxDepth << endl;
 
 		TripletTriangle<I> m;
-		findAllR(m, "", 0);
+		findAllR(m, 0);
 
 		//cout << "" << m_paths.size() << " paths. Maxdepth: " << m_countMaxDepth << " Deadends: " << m_countDeadEnds << endl;
 		return (m_paths.size() > 0);
 	}
 
 private:
-	bool findAllR(const TripletTriangle<I>& triangle, string path, unsigned int depth) 
+	bool findAllR(const TripletTriangle<I>& triangle, unsigned int depth) 
 	{
 		Triplet<I> ctr = triangle.centroid();
 		assert(ctr.isCoprime());
 		if(ctr == m_target) 
 		{
-			path = path + "-ctr";
+			string path = triangle.path + "-ctr";
 			if(std::find(m_paths.begin(), m_paths.end(), path) == m_paths.end()) 
 			{
 				m_paths.push_back(path);
@@ -1116,9 +1194,9 @@ private:
 		Triplet<I> p02 = triangle[0] + triangle[2];
 
 		// is this step necessary? seems that every triple should eventually be a vertex..
-		if(p01 == m_target) { m_paths.push_back(path + "-p01"); return true; }
-		if(p12 == m_target) { m_paths.push_back(path + "-p12"); return true; }
-		if(p02 == m_target) { m_paths.push_back(path + "-p02"); return true; }
+		if(p01 == m_target) { m_paths.push_back(triangle.path + "-p01"); return true; }
+		if(p12 == m_target) { m_paths.push_back(triangle.path + "-p12"); return true; }
+		if(p02 == m_target) { m_paths.push_back(triangle.path + "-p02"); return true; }
 
 		if(depth >= m_maxDepth) {
 			++m_countMaxDepth;
@@ -1132,8 +1210,8 @@ private:
 
 		const char *ops = m_operations.data();
 		for(; *ops; ++ops) {
-			TripletTriangle<I> m2(*ops, triangle);
-			findAllR(m2, path + *ops, depth + 1);
+			//TripletTriangle<I> m2(*ops, triangle);
+			findAllR(triangle + *ops, depth + 1);
 		}
 
 		return false;
@@ -1154,12 +1232,13 @@ public:
 
 		if(m_bVerbose) 
 		{
-			cout << "--- Sextant search [Growth:" << GrowthEnumString(m_growth)<<"] grow for " << m_target 
+			cout << "--- Sextant search --- Target: " << m_target 
+				<< " Growth: " << GrowthEnumString(m_growth) 
 				<< " Depth: " << m_maxDepth << " ---\n";
 		}
 
 		TripletTriangle<I> m;
-		bool found = (searchR(m, "", 0) > 0);
+		bool found = (searchR(m, 0) > 0);
 
 		//cout << endl;
 		std::sort(m_paths.begin(), m_paths.end());
@@ -1167,7 +1246,7 @@ public:
 	}
 
 private:
-	int searchR(const TripletTriangle<I> &triangle, string path, unsigned int depth) 
+	int searchR(const TripletTriangle<I> &triangle, unsigned int depth) 
 	{
 		if(triangle.isZero())
 		{
@@ -1243,7 +1322,10 @@ private:
 			if(ctr == m_target)
 			{
 				//found = true;
-				m_paths.push_back(path + ".");
+				if(m_bVerbose)
+					cout << "FOUND: " << triangle.path << "." << endl;
+
+				m_paths.push_back(triangle.path + ".");
 				return 1;
 			}
 
@@ -1268,7 +1350,7 @@ private:
 			if(depth >= m_maxDepth) 
 			{
 				++m_countMaxDepth;
-				m_bestPath = (path + "...");
+				m_bestPath = (triangle.path + "...");
 				return 0;
 			}
 
@@ -1332,45 +1414,48 @@ private:
 			if(sextant == SEX00)
 			{
 				//found = true;
-				m_paths.push_back(path + ".");
+				if(m_bVerbose)
+					cerr << "Path found: " << triangle.path << "." << endl;
+
+				m_paths.push_back(triangle.path + ".");
 				return 1;
 			}
 			else if(triangle.numColumns() == 2)
 			{
 				// 1D binary search
 				if(sextant == SEXX0) 		// Left (toward X)
-					foundCount += searchR(triangle + 'a', path + "a", depth + 1);
+					foundCount += searchR(triangle + 'a', depth + 1);
 				else if(sextant == SEXY0)	// Right (toward Y)
-					foundCount += searchR(triangle + 'A', path + "A", depth + 1);
+					foundCount += searchR(triangle + 'A', depth + 1);
 				else
 				{
 					cerr << "!!??\n";
 				}
 			}
 			else if(sextant == SEXXN)
-				foundCount += searchR( triangle + 'x', path + 'x',		depth + 1);
+				foundCount += searchR( triangle + 'x', 		depth + 1);
 			else if(sextant == SEXYP)
-				foundCount += searchR( triangle + 'Y', path + 'Y',		depth + 1);
+				foundCount += searchR( triangle + 'Y', 		depth + 1);
 			else if(sextant == SEXYN)
-				foundCount += searchR( triangle + 'y', path + 'y',		depth + 1);
+				foundCount += searchR( triangle + 'y', 		depth + 1);
 			else if(sextant == SEXZP)
-				foundCount += searchR( triangle + 'Z', path + 'Z',		depth + 1);
+				foundCount += searchR( triangle + 'Z', 		depth + 1);
 			else if(sextant == SEXZN)
-				foundCount += searchR( triangle + 'z', path + 'z',		depth + 1);
+				foundCount += searchR( triangle + 'z', 		depth + 1);
 			else if(sextant == SEXXP)
-				foundCount += searchR( triangle + 'X', path + 'X',		depth + 1);
+				foundCount += searchR( triangle + 'X', 		depth + 1);
 			else if(sextant == SEXX0) 	// on line between X and ctr: merge YZ->X, then toward Y
-				foundCount += searchR( triangle + '2' + 'A', path + "{YZ}A",	depth + 1);
+				foundCount += searchR( triangle + '2' + 'A', depth + 1);
 			else if(sextant == SEXYZ) 	// on line between ctr and YZ's midpoint: merge YZ->X, then toward X
-				foundCount += searchR( triangle + '2' + 'a', path + "{YZ}a",	depth + 1);
+				foundCount += searchR( triangle + '2' + 'a', depth + 1);
 			else if(sextant == SEXY0)	// on line between Y and ctr: merge XZ->X, then toward Y
-				foundCount += searchR( triangle + '3' + 'A', path + "{ZX}A",	depth + 1);
+				foundCount += searchR( triangle + '3' + 'A', depth + 1);
 			else if(sextant == SEXZX)	// on line between ctr and XZ's midpoint: merge XZ->X, then toward X
-				foundCount += searchR( triangle + '3' + 'a', path + "{ZX}a",	depth + 1);
+				foundCount += searchR( triangle + '3' + 'a', depth + 1);
 			else if(sextant == SEXZ0)	// on line between Z and ctr: merge XY->X, then toward Y
-				foundCount += searchR( triangle + '1' + 'A', path + "{XY}A",	depth + 1);
+				foundCount += searchR( triangle + '1' + 'A', depth + 1);
 			else if(sextant == SEXXY)	// on line between ctr and XY's midpoint: merge XY->X, then toward X
-				foundCount += searchR( triangle + '1' + 'a', path + "{XY}a",	depth + 1);
+				foundCount += searchR( triangle + '1' + 'a', depth + 1);
 			else
 			{
 				cerr << "!!??\n";
@@ -1475,7 +1560,7 @@ private:
 		return false;
 	}
 
-	map<unsigned int, unsigned int> m_depthCounts;
+	std::map<unsigned int, unsigned int> m_depthCounts;
 
 	void enumerateR(const TripletTriangle<I> &triangle, string path, unsigned int depth) {
 
@@ -1723,7 +1808,9 @@ private:
 				int fromCol = rand() % 3;
 				int toCol = (fromCol + 1+rand() % 1) % 3;
 				x.merge(fromCol, toCol);
-				assert(x.centroid().isCoprime());
+				auto ctr = x.centroid();
+				int g = gcd(&ctr.x, 3);
+				ASSERT(ctr.isCoprime(), string("not coprime: ") +std::to_string(g)+" "+ std::to_string(x));
 			}
 		}
 

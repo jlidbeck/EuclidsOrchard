@@ -384,10 +384,11 @@ void EuclidDemo::drawViewport(float x0, float y0, float x1, float y1)
 
 		char buf[80], buf2[80];
 		sprintf_s(buf2, "%.2lf fps", m_fps);
-		sprintf_s(buf, "%s %s %u : %u", 
-			GrowthEnumString(m_search.m_growth), 
+		sprintf_s(buf, "%s %s queue: %u tri: %u collision: %d", 
+			GrowthEnumString(m_search.m_growth),
 			m_search.m_operations.c_str(), 
-			m_growQueue.size(), m_allTriangles.size());
+			m_growQueue.size(), m_allTriangles.size(),
+			m_search.m_countCollision);
 		vector<string> asz = { buf2, buf };
 		m_text.draw(asz);
 
@@ -423,9 +424,9 @@ void EuclidDemo::resetGrowthQueue()
 	TriangleNode tnode(m_timer.t(), 19.5);
 	m_growQueue.push(tnode);
 
-	countMaxDepth = 0;
-	countMaxSum = 0;
-	countCollision = 0;
+	m_search.m_countMaxDepth = 0;
+	m_search.m_countMaxSum = 0;
+	m_search.m_countCollision = 0;
 }
 
 //	search for a specific target
@@ -434,6 +435,10 @@ void EuclidDemo::targetFind(GrowthEnum shape, const Triplet<int> &target)
 	m_search.m_growth = shape;
 	m_search.m_target = target;
 	m_search.m_targetRadius = 0.1f;
+
+    cout << "FIND: " << m_search.m_target << " " << GrowthEnumString(m_search.m_growth)
+        << " radius: " << m_search.m_targetRadius << " ops: " << m_search.m_operations << endl
+        << " max depth: " << m_search.m_maxDepth << " max sum: " << m_search.m_nMaxTriangleSum << endl;
 
 	resetGrowthQueue();
 }
@@ -448,11 +453,12 @@ void EuclidDemo::targetFind(GrowthEnum shape)
 	createRandomTarget();
 	resetGrowthQueue();
 
-	cout << "FIND: " << m_search.m_target << " " << GrowthEnumString(m_search.m_growth) 
-		 << " radius: " << m_search.m_targetRadius << " ops: " << m_search.m_operations << endl;
+    cout << "FIND: " << m_search.m_target << " " << GrowthEnumString(m_search.m_growth)
+        << " radius: " << m_search.m_targetRadius << " ops: " << m_search.m_operations << endl
+        << " max depth: " << m_search.m_maxDepth << " max sum: " << m_search.m_nMaxTriangleSum << endl;
 
 	//TRACE("**Find: Added %d triangles. Collisions: %d Max depth: %d Max sum: %d\n", 
-	//	m_allTriangles.size()-countBefore, countCollision, countMaxDepth, countMaxSum);
+	//	m_allTriangles.size()-countBefore, m_search.m_countCollision, m_search.m_countMaxDepth, m_search.m_countMaxSum);
 }
 
 void EuclidDemo::createRandomTarget()
@@ -468,7 +474,7 @@ void EuclidDemo::createRandomTarget()
 		Triplet<int> pt1(v[0], v[1] + size, v[2]);
 		Triplet<int> pt2(v[0], v[1], v[2] + size);
 		m_search.m_clip.set(pt0, pt1, pt2);
-		ASSERT(m_search.m_clip.isTriangle());
+		ASSERT(m_search.m_clip.isTriangle(), "clip is not a triangle");
 	} while(!masterTriangle.containsTriangle(m_search.m_clip));
 
 	m_search.m_target = m_search.m_clip.centroid();
@@ -517,10 +523,11 @@ void EuclidDemo::step()
 		// add original triangle to death queue to eventually remove.
 
 		TriangleNode tnode = it->second;
-		ASSERT(it->first == it->second.tri);
+		ASSERT(it->first == it->second.tri, "check failed");
 
 		// cull nodes
-		if(t > tnode.m_fStartTime + tnode.m_fLifespan) {
+		if(t > tnode.m_fStartTime + tnode.m_fLifespan) 
+		{
 			// this branch has reached end of life: cull
 			it = m_allTriangles.erase(it);
 			continue;
@@ -553,7 +560,7 @@ bool EuclidDemo::processGrowthQueue(int count)
 		tnode = m_growQueue.top();
 		
 		// sanity checks
-		ASSERT(tnode.tri.depth < 10000);
+		ASSERT(tnode.tri.depth < 10000, "depth out of range:");
 		//if(m_growQueue.size() < 8) {
 		//	TRACE("Q[%d]. LAST depth: %d sum: %d\n", m_growQueue.size(), 
 		//		tnode.tri.depth, tnode.tri.centroid().sum());
@@ -591,13 +598,54 @@ bool EuclidDemo::processGrowthQueue(int count)
 				break;
 
 			case GrowthEnum::POINT_SEARCH:	// point search
-				//bIntersection = tnode.tri.containsPoint(m_search.m_target);
-				// all 3 points in?
-				bGenerateChildren =
-					   tnode.tri.containsPoint(m_search.m_clip[0])
-					&& tnode.tri.containsPoint(m_search.m_clip[1])
-					&& tnode.tri.containsPoint(m_search.m_clip[2]);
-				break;
+            {
+                auto c = tnode.tri.centroid();
+                if (c == m_search.m_target)
+                {
+                    if (tnode.tri.numColumns() == 1)
+                    {
+                        cout << "FOUND:  " << tnode.tri.path << endl << tnode.tri << endl;
+                        m_search.m_paths.push_back(tnode.tri.path);
+                        bGenerateChildren = false;
+                    }
+                    else
+                    {
+                        //cou?t << "ALMOST! waiting for dim collapse\n" << tnode.tri << "\nat: " << tnode.tri.path << endl;
+                        bGenerateChildren = true;
+                    }
+                }
+                else if (tnode.tri.numColumns() == 1)
+                {
+                    //cout << "dead end: ";
+                    bGenerateChildren = false;
+                }
+                else 
+                {
+                    bool b0 = c.x >= m_search.m_target.x;
+                    bool b1 = c.y >= m_search.m_target.y;
+                    bool b2 = c.z >= m_search.m_target.z;
+
+                    bGenerateChildren = tnode.tri.containsPoint(m_search.m_target);
+
+                    if (b0 || b1 || b2)
+                        bGenerateChildren = false;
+
+                    //if (bGenerateChildren)
+                    //{
+                    //    if (tnode.tri.numColumns() == 2)
+                    //    {
+                    //        cout << "contains target, searching edge " << tnode.tri.path << ":\n" << tnode.tri;
+                    //    }
+                    //}
+                }
+
+                //// all 3 points in?
+                //bGenerateChildren =
+                //	   tnode.tri.containsPoint(m_search.m_clip[0])
+                //	&& tnode.tri.containsPoint(m_search.m_clip[1])
+                //	&& tnode.tri.containsPoint(m_search.m_clip[2]);
+                break;
+            }
 
 			case GrowthEnum::STOCHASTIC:
 			{
@@ -661,17 +709,17 @@ bool EuclidDemo::processGrowthQueue(int count)
 				continue;
 			}
 
-			ASSERT(childNode.tri.depth < 10000);
+			ASSERT(childNode.tri.depth < 10000, "depth out");
 			if(m_allTriangles.count(childNode.tri) > 0) {
-				++countCollision;
+				++m_search.m_countCollision;
 				//continue;
 			}
-			if(childNode.tri.depth > m_settings.m_nMaxTriangleDepth) {
-				++countMaxDepth;
+			if(childNode.tri.depth > m_search.m_maxDepth) {
+				++m_search.m_countMaxDepth;
 				continue;
 			}
-			if(childNode.tri.centroid().sum() > m_settings.m_nMaxTriangleSum) {
-				++countMaxSum;
+			if(childNode.tri.centroid().sum() > m_search.m_nMaxTriangleSum) {
+				++m_search.m_countMaxSum;
 				continue;
 			}
 
@@ -1255,19 +1303,19 @@ LONG EuclidDemo::handleKeyDown(
 
 	case VK_END   :
 	case VK_LEFT  :
-		m_settings.m_nMaxTriangleDepth = max(1, m_settings.m_nMaxTriangleDepth - repeatCount);
+		m_search.m_maxDepth = max(1, m_search.m_maxDepth - repeatCount);
 		return 0;
 
 	case VK_RIGHT :
-		m_settings.m_nMaxTriangleDepth = min(10000, m_settings.m_nMaxTriangleDepth + repeatCount);
+		m_search.m_maxDepth = min(10000, m_search.m_maxDepth + repeatCount);
 		return 0;
 
 	case VK_UP    :
-		m_settings.m_nMaxTriangleSum = min(1000, m_settings.m_nMaxTriangleSum + repeatCount);
+		m_search.m_nMaxTriangleSum = min(1000, m_search.m_nMaxTriangleSum + repeatCount);
 		return 0;
 
 	case VK_DOWN  :
-		m_settings.m_nMaxTriangleSum = max(3, m_settings.m_nMaxTriangleSum - repeatCount);
+		m_search.m_nMaxTriangleSum = max(3, m_search.m_nMaxTriangleSum - repeatCount);
 		return 0;
 
 		break;
@@ -1461,12 +1509,17 @@ bool EuclidDemo::executeUserCommand(string sz)
 			{
 				m_settings.randomize();
 			}
+			else if(asz[0] == "verbose")
+			{
+				m_search.m_bVerbose = !m_search.m_bVerbose;
+				cout << "verbose: " << m_search.m_bVerbose << endl;
+			}
 			else
 			{
 				printf("? '%s'\n", sz.c_str());
-				printf("OPS: 0=reset, clear, 123xyzXYZjklmnoabcABCi...\n");
-				printf("fill, pal, verbose,\n");
-				printf("op x, find x, look x, best x, alpha x\n");
+				printf("OPS: 0=reset, {xyzXYZjklmnoabcABC123}: abcABC=half merges, xyzXYZ=cascade merges, 123=dimensionality collapse\n");
+				printf("clear, fill, pal, verbose,\n");
+				printf("op {ops}, find {x y z}, look {x y z}, best {x y z}, alpha x\n");
 			}
 		}
 		else
@@ -1476,17 +1529,12 @@ bool EuclidDemo::executeUserCommand(string sz)
 			{
 				m_search.m_operations = asz[1];
 			}
-			else if(asz[0] == "verbose")
-			{
-				m_search.m_bVerbose = !m_search.m_bVerbose;
-				cout << "verbose: " << m_search.m_bVerbose << endl;
-			}
 			else if(asz[0] == "find")
 			{
 				stringstream str(asz[1]);
 				Triplet<int> target;
 				str >> target;
-				targetFind(GrowthEnum::CIRCLE, target);
+				targetFind(GrowthEnum::POINT_SEARCH, target);
 			}
 			else if(asz[0] == "best")
 			{
@@ -1502,10 +1550,10 @@ bool EuclidDemo::executeUserCommand(string sz)
 					s.m_maxDepth = 100;
 					s.m_maxHeight = 5000;
 					s.search(a);
-					cout << "A: " << s.m_paths.size()
-						<< " MAX:" << s.m_countMaxDepth
-						<< " " << (s.m_paths.size() > 0 ? s.m_paths[0] : "")
-						<< " best:" << s.m_bestPath << endl;
+					cout << "Paths found: " << s.m_paths.size()
+						<< " MaxDepthCount: " << s.m_countMaxDepth
+						<< (s.m_paths.size() > 0 ? string("\nfirst: ") + s.m_paths[0] : "")
+						<< "\nbest:  " << s.m_bestPath << endl;
 					addTrianglePath(s.m_paths.size() > 0 ? s.m_paths[0] : s.m_bestPath);
 				}
 			}

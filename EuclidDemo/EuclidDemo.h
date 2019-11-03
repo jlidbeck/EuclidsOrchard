@@ -76,8 +76,8 @@ public:
 	float fRandomPaletteProbability = 0.5;
 
 	double TRI_TIME_LIFESPAN = 30.0;
-	int m_nMaxTriangleDepth = 25;
-	int m_nMaxTriangleSum = 1000;
+	//int m_nMaxTriangleDepth = 25;
+	//int m_nMaxTriangleSum = 1000;
 	bool m_alive = true;
 	bool m_bReplaceParent = true;
 	
@@ -312,9 +312,9 @@ private:
 	//std::priority_queue<TriangleNode, deque<TriangleNode>, TNodeLowSumPriority > 
 		m_growQueue;
 
-	int countMaxDepth = 0;
-	int countMaxSum = 0;
-	int countCollision = 0;
+	//int countMaxDepth = 0;
+	//int countMaxSum = 0;
+	//int countCollision = 0;
 
 	//bool verbose = true;
 
