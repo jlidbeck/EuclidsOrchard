@@ -46,7 +46,7 @@ using namespace std;
 template<class T>
 T dot(const vector<T> &a, const vector<T> &b)
 {
-    return std::inner_product(a.begin(), a.end(), b.begin(), 0);
+    return std::inner_product(a.begin(), a.end(), b.begin(), (T)0);
 }
 
 template<class C>
