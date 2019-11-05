@@ -424,12 +424,7 @@ public:
 	TripletTriangle operator+(char op) const
 	{
 		TripletTriangle result(*this);
-		if(result.operate(op))
-			return result;
-		result.m[0].set(0, 0, 0);
-		result.m[1].set(0, 0, 0);
-		result.m[2].set(0, 0, 0);
-		result.depth = 0;
+        result.operate(op);
 		return result;
 	}
 
@@ -607,15 +602,19 @@ public:
 
 		assert(ai != bi);
 		assert(ai >= 0 && ai < 3 && bi >= 0 && bi < 3);
-		if(!m[ai] && !m[bi])
-			return false;
 
-		auto otherCol = m[3 - ai - bi];
-		// [0]=other, [1]=[from]+[to]
-		auto colsum = m[ai] + m[bi];
-		m[0] = colsum;
-		m[1] = otherCol;
-		m[2] = { 0,0,0 };
+        if (ai > bi)
+            std::swap(ai, bi);
+
+        m[ai] = m[ai] + m[bi];
+        m[bi] = { 0,0,0 };
+
+        // pack left
+        if (bi == 1)
+        {
+            std::swap(m[1], m[2]);
+        }
+
 
 		Triplet<I> ctr = this->centroid();
         assert(ctr == before);
@@ -696,12 +695,12 @@ public:
 		switch(op)
 		{
 			// the 6 basic transforms: each divides the parent triangle in half
-			case 'a': return this->merge(0, 1);
-			case 'b': return this->merge(1, 2);
-			case 'c': return this->merge(2, 0);
-			case 'A': return this->merge(1, 0);
-			case 'B': return this->merge(2, 1);
-			case 'C': return this->merge(0, 2);
+			case 'l': return this->merge(1, 0);     // for 2D, equivalent to left on Stern-Brocot tree (smaller fraction value)
+			case 'r': return this->merge(0, 1);     // for 2D, equivalent to right child on Stern-Brocot tree (larger fraction value)
+			case 'b': return this->merge(2, 1);
+			case 'B': return this->merge(1, 2);
+			case 'c': return this->merge(0, 2);
+			case 'C': return this->merge(2, 0);
 			// cascade merges
 			// transforms triangle to one of its parent's sextants
 			// the 6 aggregate transforms: each defines one sixth of the parent triangle
@@ -712,12 +711,12 @@ public:
 			case 'Y': return this->merge3(1, 0);
 			case 'Z': return this->merge3(2, 1);
 			// alternate sixth division: 3 corner quadrants (like a Sierpinski triangle), 3 inner triangle thirds
-			case 'j': this->merge(0, 1); this->merge(0, 2); break; // X corner quadrant
-			case 'k': this->merge(1, 0); this->merge(1, 2); break; // Y corner quadrant
-			case 'l': this->merge(2, 1); this->merge(2, 0); break; // Z corner quadrant
-			case 'm': this->merge(0, 1); this->merge(2, 0); this->merge(1, 2) && rotate(); break; // X-ward inner 12th, rotated for aesthetics
-			case 'n': this->merge(1, 2); this->merge(0, 1); this->merge(2, 0) && rotate(); break; // Y-ward inner 12th
-			case 'o': this->merge(2, 0); this->merge(1, 2); this->merge(0, 1) && rotate(); break; // Z-ward inner 12th
+			case 'J': this->merge(0, 1); this->merge(0, 2); break; // X corner quadrant
+			case 'K': this->merge(1, 0); this->merge(1, 2); break; // Y corner quadrant
+			case 'L': this->merge(2, 1); this->merge(2, 0); break; // Z corner quadrant
+			case 'M': this->merge(0, 1); this->merge(2, 0); this->merge(1, 2) && rotate(); break; // X-ward inner 12th, rotated for aesthetics
+			case 'N': this->merge(1, 2); this->merge(0, 1); this->merge(2, 0) && rotate(); break; // Y-ward inner 12th
+			case 'O': this->merge(2, 0); this->merge(1, 2); this->merge(0, 1) && rotate(); break; // Z-ward inner 12th
 			// thirds
 			//case 'u': this->mergeAll(0); break;
 			//case 'v': this->mergeAll(1); break;
@@ -1221,6 +1220,7 @@ public:
 	const int ERROR_INTERNAL = -9;
 
 	// sextant tree search. each recursion drills down into 1/6 of the parent search area.
+    // Uses sextant cascade operators (xyzXYZ) and dimensional collapse (123). ignores m_operations.
 	int search(const Triplet<I> &target)
 	{
 		m_target = target;
@@ -1336,11 +1336,12 @@ private:
 
 		int foundCount = 0;
 
-/*
 		// method 1
-		if(sextant.asInt == SEX00) {
-			found = true;
-			m_paths.push_back(path + "-ctr");
+
+        //  if target is found, skip the dimensional collapses
+		if(sextant.asInt == SEX00) 
+        {
+			m_paths.push_back(triangle.path + "!");
 			return 1;
 		}//*/
 
@@ -1411,51 +1412,52 @@ private:
 
 			//	METHOD TWO
 
-			if(sextant == SEX00)
-			{
-				//found = true;
-				if(m_bVerbose)
-					cerr << "Path found: " << triangle.path << "." << endl;
 
-				m_paths.push_back(triangle.path + ".");
-				return 1;
-			}
-			else if(triangle.numColumns() == 2)
-			{
-				// 1D binary search
-				if(sextant == SEXX0) 		// Left (toward X)
-					foundCount += searchR(triangle + 'a', depth + 1);
-				else if(sextant == SEXY0)	// Right (toward Y)
-					foundCount += searchR(triangle + 'A', depth + 1);
-				else
-				{
-					cerr << "!!??\n";
-				}
-			}
-			else if(sextant == SEXXN)
-				foundCount += searchR( triangle + 'x', 		depth + 1);
+            //  2D
+            if (triangle.numColumns() == 2)
+            {
+                // 3 possibilities: x-ward, y-ward, or 0 (target found)
+                if (sextant == SEXX0) 	// on line between X and ctr
+                    foundCount += searchR(triangle + 'r', depth + 1);
+                else if (sextant == SEXY0)	// on line between Y and ctr
+                    foundCount += searchR(triangle + 'l', depth + 1);
+                else if (sextant == SEX00)
+                    foundCount += searchR(triangle + '1', depth + 1);
+                else
+                    throw(std::exception("Invalid 2D sextant result"));
+                return foundCount;
+            }
+
+            // 3 column
+            if (sextant == SEX00)
+            {
+                m_paths.push_back(triangle.path + "-ctr");
+                return 1;
+            }
+            else if(sextant == SEXXN)
+				foundCount += searchR( triangle + 'x', depth + 1);
 			else if(sextant == SEXYP)
-				foundCount += searchR( triangle + 'Y', 		depth + 1);
+				foundCount += searchR( triangle + 'Y', depth + 1);
 			else if(sextant == SEXYN)
-				foundCount += searchR( triangle + 'y', 		depth + 1);
+				foundCount += searchR( triangle + 'y', depth + 1);
 			else if(sextant == SEXZP)
-				foundCount += searchR( triangle + 'Z', 		depth + 1);
+				foundCount += searchR( triangle + 'Z', depth + 1);
 			else if(sextant == SEXZN)
-				foundCount += searchR( triangle + 'z', 		depth + 1);
+				foundCount += searchR( triangle + 'z', depth + 1);
 			else if(sextant == SEXXP)
-				foundCount += searchR( triangle + 'X', 		depth + 1);
-			else if(sextant == SEXX0) 	// on line between X and ctr: merge YZ->X, then toward Y
-				foundCount += searchR( triangle + '2' + 'A', depth + 1);
-			else if(sextant == SEXYZ) 	// on line between ctr and YZ's midpoint: merge YZ->X, then toward X
-				foundCount += searchR( triangle + '2' + 'a', depth + 1);
+				foundCount += searchR( triangle + 'X', depth + 1);
+			else if(sextant == SEXX0) 	// on line between X and ctr: merge YZ, then toward X
+				foundCount += searchR( triangle + '2', depth + 1);
+			else if(sextant == SEXYZ) 	// on line between ctr and YZ's midpoint: merge YZ, then toward Y
+				foundCount += searchR( triangle + '2', depth + 1);
 			else if(sextant == SEXY0)	// on line between Y and ctr: merge XZ->X, then toward Y
-				foundCount += searchR( triangle + '3' + 'A', depth + 1);
+				foundCount += searchR( triangle + '3', depth + 1);
 			else if(sextant == SEXZX)	// on line between ctr and XZ's midpoint: merge XZ->X, then toward X
-				foundCount += searchR( triangle + '3' + 'a', depth + 1);
-			else if(sextant == SEXZ0)	// on line between Z and ctr: merge XY->X, then toward Y
-				foundCount += searchR( triangle + '1' + 'A', depth + 1);
+				foundCount += searchR( triangle + '3', depth + 1);
+			else if(sextant == SEXZ0)	// on line between Z and ctr: merge XY->X, then toward Y (formerly Z)
+				foundCount += searchR( triangle + '1', depth + 1);
 			else if(sextant == SEXXY)	// on line between ctr and XY's midpoint: merge XY->X, then toward X
-				foundCount += searchR( triangle + '1' + 'a', depth + 1);
+				foundCount += searchR( triangle + '1', depth + 1);
 			else
 			{
 				cerr << "!!??\n";
@@ -1483,7 +1485,7 @@ public:
 			cout << endl;
 		}
 		else {
-			cout << "\n**** NO PATHS FOUND ****\n";
+			cout << m_target << ": **** NO PATHS FOUND at depth " << m_maxDepth << " ****\n";
 		}
 	}
 
@@ -1715,11 +1717,12 @@ private:
 
 		TripletSearch<int> s;
 		s.m_growth = GrowthEnum::POINT_SEARCH;
-		s.m_bVerbose = true;
+		s.m_bVerbose = false;
+        s.m_maxDepth = 5;
 		TripletTriangle<I> t;
-		for(int i = 3; i <= 5; ++i) 
+		for(int i = 1; i <= 5; ++i) 
 		{
-			for(int j = 3; j <= i; ++j) 
+			for(int j = 1; j <= i; ++j) 
 			{
 				for(int k = 1; k <= j; ++k) 
 				{
@@ -1733,6 +1736,7 @@ private:
 						cout << " search: " << s.m_paths.size() << " paths";
 
 						assert(s.m_paths.size() == 1);
+                        cout << " " << s.m_paths[0] << endl;
 
 						s.findAll(pt);
 						cout << " findAll: " << s.m_paths.size() << " paths found.\n";
@@ -1777,7 +1781,8 @@ private:
 					vec3 p = { x, y, z };
 					if(p.isCoprime()) {
 						// symmetry is established... restrict to one sextant
-						if(p.x <= p.y && p.y <= p.z) {
+						//if(p.x <= p.y && p.y <= p.z) 
+                        {
 							q.push(p);
 						}
 					}
@@ -1790,8 +1795,7 @@ private:
 			vec3 p = q.top();
 			q.pop();
 			TripletSearch<int> search;
-			search.m_operations = "xyzXYZ123";
-			search.m_maxDepth = 6;
+			search.m_maxDepth = 8;
 			search.m_bVerbose = false;
 			//cout << "Searching for " << p << ": ";
 
