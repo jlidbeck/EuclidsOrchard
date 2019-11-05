@@ -7,3 +7,4 @@ EuclidsOrchard/Release/
 EuclidDemo/Release/
 *.tlog
 packages/
+*.user
